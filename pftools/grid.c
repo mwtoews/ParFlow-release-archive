@@ -1,0 +1,88 @@
+/*BHEADER**********************************************************************
+
+  Copyright (c) 1995-2009, Lawrence Livermore National Security,
+  LLC. Produced at the Lawrence Livermore National Laboratory. Written
+  by the Parflow Team (see the CONTRIBUTORS file)
+  <parflow@lists.llnl.gov> CODE-OCEC-08-103. All rights reserved.
+
+  This file is part of Parflow. For details, see
+  http://www.llnl.gov/casc/parflow
+
+  Please read the COPYRIGHT file or Our Notice and the LICENSE file
+  for the GNU Lesser General Public License.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License (as published
+  by the Free Software Foundation) version 2.1 dated February 1999.
+
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms
+  and conditions of the GNU General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this program; if not, write to the Free Software
+  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
+  USA
+**********************************************************************EHEADER*/
+
+#include <math.h>
+#include "pfload_file.h"
+#include "grid.h"
+
+
+/*--------------------------------------------------------------------------
+ * NewGrid
+ *--------------------------------------------------------------------------*/
+
+Grid  *NewGrid(subgrids, all_subgrids, neighbors)
+SubgridArray  *subgrids;
+SubgridArray  *all_subgrids;
+SubgridArray  *neighbors;
+{
+   Grid    *new;
+
+   Subgrid *s;
+
+   int      i, size;
+
+
+   new = talloc(Grid, 1);
+
+   (new -> subgrids)      = subgrids;
+   (new -> all_subgrids)  = all_subgrids;
+   (new -> neighbors)     = neighbors;
+
+   size = 0;
+   for (i = 0; i < SubgridArraySize(all_subgrids); i++)
+   {
+      s = SubgridArraySubgrid(all_subgrids, i);
+      size += (s -> nx)*(s -> ny)*(s -> nz);
+   }
+   (new -> size) = size;
+
+   return new;
+}
+
+
+/*--------------------------------------------------------------------------
+ * FreeGrid
+ *--------------------------------------------------------------------------*/
+
+void  FreeGrid(grid)
+Grid  *grid;
+{
+
+   FreeSubgridArray(GridAllSubgrids(grid));
+
+   /* these subgrid arrays point to subgrids in all_subgrids */
+   SubgridArraySize(GridSubgrids(grid)) = 0;
+   FreeSubgridArray(GridSubgrids(grid));
+   SubgridArraySize(GridNeighbors(grid)) = 0;
+   FreeSubgridArray(GridNeighbors(grid));
+
+   free(grid);
+}
+
+
+

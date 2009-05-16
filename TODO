@@ -1,0 +1,23 @@
+SGS
+
+Update manual to reflect the change to the makefile.   "make install" is now the default behavior.
+
+SGS  
+
+There were some compile problems with the CLM F90 and gfortran,
+flagged with "SGS" in the CLM directory.  All had to do with file
+open/write statements. A couple of the write statements were simply
+commented out to get things to compile.
+
+
+
+SGS
+
+The PFMG and SMG solvers should be updated to use the setbox hypre
+methods for copying data.   Should speed things up a bit.
+
+RMM
+Manual: all new test cases (e.g. CLM) not in manual
+Manual: all new keys for pftools (top bddy, conversions, silo) not in manual
+Manual: would be nice to have a short section mentioning silo libs and hypre libs
+
