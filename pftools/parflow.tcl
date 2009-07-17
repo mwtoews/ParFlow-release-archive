@@ -86,6 +86,7 @@ namespace eval Parflow {
     namespace export pfflux
     namespace export pfnewlabel
     namespace export pfaxpy
+    namespace export pfsum
     namespace export pfgetstats
     namespace export pfmdiff
     namespace export pfdiffelt
@@ -94,6 +95,12 @@ namespace eval Parflow {
     namespace export pfnewgrid
     namespace export pfnewlabel
     namespace export pfdelete
+    namespace export pfcomputetop
+    namespace export pfextracttop
+    namespace export pfsurfacestorage
+    namespace export pfsubsurfacestorage
+    namespace export pfsurfacerunoff
+    namespace export pfwritedb
 
     namespace export pfprintdata
     namespace export pfprintdiff
@@ -129,7 +136,7 @@ proc Parflow::PFWriteArray {file name} {
 #
 # Save the current state to file
 #
-proc Parflow::PFWriteDB {name} {
+proc Parflow::pfwritedb {name} {
 
     #
     # SGS: if file exists we should probably prompt to overwrite
@@ -143,6 +150,7 @@ proc Parflow::PFWriteDB {name} {
 
     close $file
 }
+
 
 #
 # Sets a value in the database
@@ -200,7 +208,7 @@ proc Parflow::pfrun { runname args } {
     # Write out the current state of the database
     # 
     
-    PFWriteDB $runname
+    pfwritedb $runname
 
     #
     # If user does not set the hostname then use this machine
@@ -304,6 +312,7 @@ proc Parflow::pfundist { runname } {
 	append filelist [glob -nocomplain $root.et.?????.*$postfix] " "
 	append filelist [glob -nocomplain $root.obf.?????.*$postfix] " "
 	append filelist [glob -nocomplain $root.mask.?????.*$postfix] " "
+	append filelist [glob -nocomplain $root.mask.*$postfix] " "
     }
 
     foreach i $filelist {

@@ -235,7 +235,7 @@ PFModule   *GeometriesNewPublicXtra()
 
    GeomSolid     **tmp_solids;
 
-   IndicatorData  *indicator_data, *new_indicator_data, *current_indicator_data;
+   IndicatorData  *indicator_data, *new_indicator_data, *current_indicator_data = NULL;
 
    int             i, g, intype, num_intypes;
 
@@ -334,7 +334,7 @@ PFModule   *GeometriesNewPublicXtra()
 	    /* read in the number of characters in the filename for the indicator field */
 
 	    sprintf(key, "Geom.%s.FileName", NA_IndexToName(geom_input_na, i));
-	    new_indicator_data -> filename = GetString(key);
+	    new_indicator_data -> filename = strdup(GetString(key));
 	    
 	    /* make sure and NULL out the next_indicator_data pointer */
 	    (new_indicator_data -> next_indicator_data) = NULL;
@@ -499,9 +499,19 @@ void  GeometriesFreePublicXtra()
       {
          tmp_indicator_data = (current_indicator_data -> next_indicator_data);
 
-         /*tfree((current_indicator_data -> indicators));
-         tfree((current_indicator_data -> filename));
-         tfree(current_indicator_data);*/
+         if(current_indicator_data -> indicators) {
+	    tfree(current_indicator_data -> indicators);
+	 }
+
+	 if(current_indicator_data -> filename) {
+	    tfree(current_indicator_data -> filename);
+	 }
+
+	 if(current_indicator_data -> indicator_na) {
+	    NA_FreeNameArray(current_indicator_data -> indicator_na);
+	 }
+
+	 tfree(current_indicator_data);
 
          current_indicator_data = tmp_indicator_data;
       }
@@ -516,11 +526,7 @@ void  GeometriesFreePublicXtra()
 
 int  GeometriesSizeOfTempData()
 {
-   PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
-
    int  sz = 0;
-
    return sz;
 }
 

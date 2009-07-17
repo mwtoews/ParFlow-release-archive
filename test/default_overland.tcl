@@ -1,6 +1,10 @@
 #  This runs the tilted-v catchment problem
 #  similar to that in Kollet and Maxwell (2006) AWR
 
+set tcl_precision 17
+
+set runname default_overland
+
 #
 # Import the ParFlow TCL package
 #
@@ -376,6 +380,10 @@ pfset Solver.PrintSubsurf				False
 pfset  Solver.Drop                                      1E-20
 pfset Solver.AbsTol                                     1E-12
  
+pfset Solver.WriteSiloSubsurfData True
+pfset Solver.WriteSiloPressure True
+pfset Solver.WriteSiloSaturation True
+pfset Solver.WriteSiloConcentration True
 
 #---------------------------------------------------------
 # Initial conditions: water pressure
@@ -393,8 +401,8 @@ pfset Geom.domain.ICPressure.RefPatch                   z-upper
 # Run and Unload the ParFlow output files
 #-----------------------------------------------------------------------------
 
-pfrun default_over
-pfundist default_over
+pfrun $runname
+pfundist $runname
 
 #
 # Tests 
@@ -407,28 +415,28 @@ set passed 1
 #
 set sig_digits 5
 
-if ![pftestFile default_over.out.perm_x.pfb "Max difference in perm_x" $sig_digits] {
+if ![pftestFile $runname.out.perm_x.pfb "Max difference in perm_x" $sig_digits] {
     set passed 0
 }
-if ![pftestFile default_over.out.perm_y.pfb "Max difference in perm_y" $sig_digits] {
+if ![pftestFile $runname.out.perm_y.pfb "Max difference in perm_y" $sig_digits] {
     set passed 0
 }
-if ![pftestFile default_over.out.perm_z.pfb "Max difference in perm_z" $sig_digits] {
+if ![pftestFile $runname.out.perm_z.pfb "Max difference in perm_z" $sig_digits] {
     set passed 0
 }
 
 foreach i "00000 00001 00002 00003 00004" {
-    if ![pftestFile default_over.out.press.$i.pfb "Max difference in Pressure for timestep $i" $sig_digits] {
+    if ![pftestFile $runname.out.press.$i.pfb "Max difference in Pressure for timestep $i" $sig_digits] {
 	set passed 0
     }
-    if ![pftestFile default_over.out.satur.$i.pfb "Max difference in Saturation for timestep $i" $sig_digits] {
+    if ![pftestFile $runname.out.satur.$i.pfb "Max difference in Saturation for timestep $i" $sig_digits] {
 	set passed 0
     }
 }
 
 
 if $passed {
-    puts "default_overland : PASSED"
+    puts "$runname : PASSED"
 } {
-    puts "default_overland : FAILED"
+    puts "$runname : FAILED"
 }

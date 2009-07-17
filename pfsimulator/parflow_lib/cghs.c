@@ -101,8 +101,8 @@ int    	 zero;
    
    int        i = 0;
 
-   double    *norm_log;
-   double    *rel_norm_log;
+   double    *norm_log     = NULL;
+   double    *rel_norm_log = NULL;
 
 
    /*-----------------------------------------------------------------------
@@ -347,10 +347,6 @@ void   CGHSFreePublicXtra()
 
 int  CGHSSizeOfTempData()
 {
-   PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra   = PFModuleInstanceXtra(this_module);
-
    int  sz = 0;
-
    return sz;
 }

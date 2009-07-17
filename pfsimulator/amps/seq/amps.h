@@ -101,10 +101,11 @@ typedef FILE *amps_File;
 
 #define amps_Fopen(filename, type) fopen((filename), (type))
 #define amps_Init(argc, argv) amps_clock_init(), 0
+#define amps_EmbeddedInit() amps_clock_init(), 0
 
 #define amps_IExchangePackage(package) 0
 
-#define amps_Wait(handle) 1
+#define amps_Wait(handle) 0
 
 /*---------------------------------------------------------------------------*/
 /* Macros for all commands that have no function in sequentail code.         */

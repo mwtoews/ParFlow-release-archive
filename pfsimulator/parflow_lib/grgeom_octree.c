@@ -43,7 +43,7 @@ int GrGeomCheckOctree(grgeom_octree)
 GrGeomOctree *grgeom_octree;
 {
    int  i;
-   int result;
+   int result = 0;
 
    if(grgeom_octree)
    {
@@ -455,8 +455,8 @@ int             level;
 int             normal_in_direction;
 {
    GrGeomOctree *current_node=NULL;
-   int           ix, iy, iz, cell_index;
-   unsigned int  cell, face;
+   int           ix = 0, iy = 0 , iz = 0, cell_index;
+   unsigned int  cell = 0, face = 0;
 
 
    if ( line_direction == XDIRECTION )
@@ -473,8 +473,7 @@ int             normal_in_direction;
    {
       ix = cell_index0;
       iy = cell_index1;
-   }
-
+   } 
 
    /* Add (if necessary) the lower cell that has this face */
    cell_index = face_index - 1;
@@ -595,6 +594,7 @@ int                  max_level;
    double	  tbox_z_lower, tbox_z_upper;
 
    int            nx, ny, nz;
+   // SGS there is an error here dz, nz are not being initialized correctly in second loop
    double         dx, dy, dz;
    int            inc, tmp_inc;
    int            ix_lower, iy_lower, iz_lower;
@@ -608,7 +608,7 @@ int                  max_level;
    double         point;
 
    int            p, i, j, k, ie, m, n, level, new_level;
-   int            iprime, jprime, kprime, ic, t, face_index;
+   int            iprime, jprime, kprime, ic, t, face_index = 0;
 
    int          **patch_table, *patch_table_len;
    int           *patch_list, *tmp_patch_list;
@@ -1289,6 +1289,9 @@ int                  max_level;
    {
       for(level = min_level; level <= max_level; level++)
       {
+         nz = Pow2(level);
+         dz = (zupper - zlower) / nz;
+
          inc = Pow2(max_level - level);
 
          ix_lower = GrGeomExtentsIXLower(ea_extents[ie]) / inc;
@@ -1590,7 +1593,7 @@ int             octree_iz;
 
    GrGeomOctree  *grgeom_octree, *grgeom_child;
 
-   int            l, min_l, max_l;
+   int            l, min_l = 0 , max_l = 0;
    int            ix, iy, iz;
    int            nx, ny, nz;
    int            rx, ry, rz;
@@ -2157,7 +2160,7 @@ GrGeomOctree *grgeom_octree;
             amps_Fprintf(file,  "0,");
          }
       }
-      if (GrGeomOctreeHasFace(grgeom_octree,GrGeomOctreeNumFaces-1))
+      if (GrGeomOctreeHasFace(grgeom_octree,(GrGeomOctreeNumFaces-1)))
       {
          amps_Fprintf(file,  "1\n");
       }

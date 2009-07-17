@@ -114,9 +114,6 @@ EXPORT(int,Parflow_Init)(Tcl_Interp *interp)
 {
    Data *data;
 
-   char *pf_dir;
-   char temp_path[MAXPATHLEN];
- 
    if ((data = InitPFToolsData()) == NULL) {
       Tcl_SetResult(interp, "Error: Could not initialize data structures for PFTools", TCL_STATIC);
       return TCL_ERROR;
@@ -170,6 +167,8 @@ EXPORT(int,Parflow_Init)(Tcl_Interp *interp)
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfaxpy", (Tcl_CmdProc *)AxpyCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfsum", (Tcl_CmdProc *)SumCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfgetstats", (Tcl_CmdProc *)GetStatsCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfmdiff", (Tcl_CmdProc *)MDiffCommand,
@@ -189,6 +188,12 @@ EXPORT(int,Parflow_Init)(Tcl_Interp *interp)
    Tcl_CreateCommand(interp, "Parflow::pfcomputetop", (Tcl_CmdProc *)ComputeTopCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfextracttop", (Tcl_CmdProc *)ExtractTopCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfsurfacestorage", (Tcl_CmdProc *)SurfaceStorageCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfsubsurfacestorage", (Tcl_CmdProc *)SubsurfaceStorageCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfsurfacerunoff", (Tcl_CmdProc *)SurfaceRunoffCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
 
 #ifdef SGS

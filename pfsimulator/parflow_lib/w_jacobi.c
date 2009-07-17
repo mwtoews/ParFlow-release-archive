@@ -81,12 +81,12 @@ int    	 zero;
    Subregion      *subregion;
 
    ComputePkg     *compute_pkg;
-   Region         *compute_reg;
+   Region         *compute_reg = NULL;
 
-   Submatrix      *A_sub;
-   Subvector      *x_sub;
+   Submatrix      *A_sub = NULL;
+   Subvector      *x_sub = NULL;
    Subvector      *b_sub;
-   Subvector      *t_sub;
+   Subvector      *t_sub = NULL;
 
    Stencil        *stencil;
    int             stencil_size;
@@ -100,15 +100,15 @@ int    	 zero;
    int       	   nx,   ny,   nz;
    int       	   sx,   sy,   sz;
 	      
-   int       	   nx_v, ny_v, nz_v;
-   int       	   nx_m, ny_m, nz_m;
+   int       	   nx_v = 0, ny_v = 0, nz_v = 0;
+   int       	   nx_m = 0, ny_m = 0, nz_m;
 
    int             compute_i, i_sa, i_s, si, i, j, k;
    int             im, iv;
 
    int             iter = 0;
 
-   CommHandle     *handle;
+   CommHandle     *handle = NULL;
 
 
    /*-----------------------------------------------------------------------
@@ -425,10 +425,6 @@ void  WJacobiFreePublicXtra()
 
 int  WJacobiSizeOfTempData()
 {
-   PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra   = PFModuleInstanceXtra(this_module);
-
    int  sz = 0;
-
    return sz;
 }

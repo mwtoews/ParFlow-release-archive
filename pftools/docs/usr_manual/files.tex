@@ -417,14 +417,26 @@ describe time units for later sections, sequence iterations in time,
 indicate actual starting and stopping values and give instructions
 on when data is printed out.
 
-\pfkey{double}{TimingInfo.BaseUnit}{no default}
-{
-This key is used to indicate the smallest common unit of time for
-describing ``time cycling data'' in, currently, the well and boundary
-condition sections.  The lengths of the cycles in those sections will be
-integer multiples of this value, therefore it needs to be the smallest
-divisor which produces an integral result for every ``real time'' cycle
-interval length needed.
+\pfkey{double}{TimingInfo.BaseUnit}{no default} { This key is used to
+  indicate the base unit of time for entering time values.  All time
+  should be expressed as a multiple of this value.  This should be set
+  to the smallest interval of time to be used in the problem.  For
+  example, a base unit of ``1'' means that all times will be integer
+  valued.  A base unit of ``0.5'' would allow integers and fractions
+  of 0.5 to be used for time input values.
+
+  The rational behind this restriction is to allow time to be
+  discretized on some interval to enable integer arithmetic to be used
+  when computing/comparing times.  This avoids the problems associated
+  with real value comparisons which can lead to events occurring at
+  different timesteps on different architectures or compilers.
+
+  This values is also used when describing ``time cycling data'' in,
+  currently, the well and boundary condition sections.  The lengths of
+  the cycles in those sections will be integer multiples of this
+  value, therefore it needs to be the smallest divisor which produces
+  an integral result for every ``real time'' cycle interval length
+  needed.  
 }
 \begin{display}\begin{verbatim}
 pfset TimingInfo.BaseUnit      1.0
@@ -1270,7 +1282,7 @@ pfset Mannings.Geom.domain.Value 5.52e-6
 \label{Topographical Slopes}
 \pfaddanchor{pfintoposlopes}
 
-Here, topographical slope values ($S_{f,x}$ and $S_{f,y}$ in Equations \ref{eq:manningsx} and \ref{eq:manningsy}) are assigned to the upper boundary of the domain using one of the methods described below.
+Here, topographical slope values ($S_{f,x}$ and $S_{f,y}$ in Equations \ref{eq:manningsx} and \ref{eq:manningsy}) are assigned to the upper boundary of the domain using one of the methods described below. Note that due to the negative sign in these equations $S_{f,x}$ and $S_{f,y}$ take a sign in the direction \emph{opposite} of the direction of the slope.  That is, negative slopes point "downhill" and positive slopes "uphill".
 
 The format for this section of input is:
 
@@ -2996,6 +3008,8 @@ simulation.
 pfset Solver.MaxIter 100
 \end{verbatim}\end{display}
 
+
+
 \pfkey{double}{Solver.RelTol}{1.0}
 {
 This value gives the relative tolerance for the linear
@@ -3148,6 +3162,78 @@ values in the timing information section.
 \begin{display}\begin{verbatim}
 pfset Solver.WriteSiloVelocities True
 \end{verbatim}\end{display}
+
+\pfkey{string}{Solver.WriteSiloSlopes}{False}
+{
+This key is used to specify printing of the x and y slope data using silo binary format.
+The printing of the data is controlled by values in the
+timing information section.  
+}
+\begin{display}\begin{verbatim}
+pfset Solver.WriteSiloSlopes  True
+\end{verbatim}\end{display}
+
+\pfkey{string}{Solver.WriteSiloMannings}{False}
+{
+This key is used to specify printing of the Manning's roughness data in silo binary format.
+The printing of the data is controlled by values in the
+timing information section.
+}
+\begin{display}\begin{verbatim}
+pfset Solver.WriteSiloMannings True
+\end{verbatim}\end{display}
+
+\pfkey{string}{Solver.WriteSiloSpecificStorage}{False}
+{
+This key is used to specify printing of the specific storage data in silo binary format.
+The printing of the data is controlled by values in the
+timing information section.
+}
+\begin{display}\begin{verbatim}
+pfset Solver.WriteSiloSpecificStorage True
+\end{verbatim}\end{display}
+
+\pfkey{string}{Solver.WriteSiloMask}{False}
+{
+This key is used to specify printing of the mask data using silo binary format.  The mask contains values equal to one for active cells and zero for inactive cells. 
+The printing of the data is controlled by values in the
+timing information section.  
+}
+\begin{display}\begin{verbatim}
+pfset Solver.WriteSiloMask  True
+\end{verbatim}\end{display}
+
+\pfkey{string}{Solver.WriteSiloEvapTrans}{False}
+{
+This key is used to specify printing of the evaporation and rainfall flux data using silo binary format.  This data comes from either \code{clm} or from external calls to \parflow{} such as \emph{WRF}.  This data is in units of $[L^3 T^{-1}]$.
+The printing of the data is controlled by values in the
+timing information section.  
+}
+\begin{display}\begin{verbatim}
+pfset Solver.WriteSiloEvapTrans  True
+\end{verbatim}\end{display}
+
+\pfkey{string}{Solver.WriteSiloEvapTransSum}{False}
+{
+This key is used to specify printing of the evaporation and rainfall flux data using silo binary format as a running, cumulative amount.  This data comes from either \code{clm} or from external calls to \parflow{} such as \emph{WRF}.  This data is in units of $[L^3]$.
+The printing of the data is controlled by values in the
+timing information section.  
+}
+\begin{display}\begin{verbatim}
+pfset Solver.WriteSiloEvapTransSum  True
+\end{verbatim}\end{display}
+
+\pfkey{string}{Solver.WriteSiloOverlandSum}{False}
+{
+This key is used to specify calculation and printing of the total overland outflow from the domain using silo binary format as a running cumulative amount.   This is integrated along all domain boundaries and is calculated any location that slopes at the edge of the domain point outward. This data is in units of $[L^3]$.
+The printing of the data is controlled by values in the
+timing information section.  
+}
+\begin{display}\begin{verbatim}
+pfset Solver.WriteSiloOverlandSum  True
+\end{verbatim}\end{display}
+
+
 %=============================================================================
 %=============================================================================
 
@@ -3205,6 +3291,26 @@ iterate as the initial iterate for the next pass.
 }
 \begin{display}\begin{verbatim}
 pfset Solver.Linear.MaxRestarts   2
+\end{verbatim}\end{display}
+
+\pfkey{integer}{Solver.MaxConvergencFailures}{3}
+{This key gives the maximum number of convergence failures
+allowed.   Each convergence failure cuts the timestep 
+in half and the solver tries to advance the solution with the reduced
+timestep.
+
+The default value is 3.   
+
+Note that setting this value to a value greater than 9 may result in
+errors in how time cycles are calculated.  Time is discretized in
+terms of the base time unit and if the solver begins to take very
+small timesteps \(smaller than base time unit \/ 1000\) the values based
+on time cycles will be change at slightly incorrect times. If the
+problem is failing converge so poorly that a large number of restarts are
+required, consider setting the timestep to a smaller value.
+}
+\begin{display}\begin{verbatim}
+pfset Solver.MaxConvergenceFailures 4
 \end{verbatim}\end{display}
 
 \pfkey{string}{Solver.Nonlinear.PrintFlag}{HighVerbosity}
@@ -3412,7 +3518,7 @@ pfset Solver.CLM.CLMDumpInterval 2
 \label{ParFlow Binary Files (.pfb)}
 
 The \file{.pfb} file format is a binary file format which is used
-to store \parflow{} grid data.
+to store \parflow{} grid data.  It is written as BIG ENDIAN binary bit ordering \cite{endian}.
 The format for the file is:
 
 \begin{display}\begin{verbatim}
@@ -3738,3 +3844,29 @@ BEGIN
    END
 END
 \end{verbatim}\end{display}
+%=============================================================================
+%=============================================================================
+
+\section{ParFlow Simple ASCII  and Simple Binary Files (.sa and .sb)}
+\label{ParFlow Simple ASCII Files (.sa and .sb)}
+
+The simple binary,\file{.sa}, file format is an ASCII file format which is used by \code{pftools}
+to write out \parflow{} grid data.  The simple binary,\code{.sb}, file format is exactly the same, just written as BIG ENDIAN binary bit ordering \cite{endian}.
+The format for the file is:
+
+\begin{display}\begin{verbatim}
+<integer : NX>  <integer : NY>  <integer : NZ>
+
+   FOR k = 0 TO  <nz> - 1
+   BEGIN
+      FOR j = 0 TO  <ny> - 1
+      BEGIN
+         FOR i = 0 TO  <nx> - 1
+         BEGIN
+            <double : data_ijk>
+         END
+      END
+   END
+\end{verbatim}\end{display}
+
+

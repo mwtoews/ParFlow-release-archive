@@ -30,25 +30,12 @@
 
 #include "databox.h"
 
-#include <stdio.h>
-#include <math.h>
-
 /*-----------------------------------------------------------------------
  * function prototypes
  *-----------------------------------------------------------------------*/
 
-#ifdef __STDC__
-# define        ANSI_PROTO(s) s
-#else
-# define ANSI_PROTO(s) ()
-#endif
-
-
-/* diff.c */
-void ComputeTop ANSI_PROTO((Databox *v1 , Databox *v2 ));
-void ExtractTop ANSI_PROTO((Databox *v1 , Databox *v2, Databox *v3 ));
-
-#undef ANSI_PROTO
+void ComputeTop(Databox  *mask, Databox  *top);
+void ExtractTop(Databox *v1 , Databox *v2, Databox *v3);
 
 #endif
 

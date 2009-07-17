@@ -87,10 +87,17 @@ int	   solver;   /* Designates the solver from which this routine is
     *-----------------------------------------------------------------------*/
 
    ProblemBaseTimeUnit(problem) = GetDouble("TimingInfo.BaseUnit");
+
    ProblemStartCount(problem)   = GetInt("TimingInfo.StartCount");
+
    ProblemStartTime(problem)    = GetDouble("TimingInfo.StartTime");
+   CheckTime(problem, "TimingInfo.StartTime", ProblemStartTime(problem));
+
    ProblemStopTime(problem)     = GetDouble("TimingInfo.StopTime");
+   CheckTime(problem, "TimingInfo.StopTime", ProblemStopTime(problem));
+
    ProblemDumpInterval(problem) = GetDouble("TimingInfo.DumpInterval");
+   CheckTime(problem, "TimingInfo.DumpInterval", ProblemDumpInterval(problem));
 
    NameArray      switch_na = NA_NewNameArray("False True");
    char *switch_name = GetStringDefault("TimingInfo.DumpAtEnd", "False");
@@ -98,7 +105,7 @@ int	   solver;   /* Designates the solver from which this routine is
    if(switch_value < 0)
    {
       InputError("Error: invalid print switch value <%s> for key <%s>\n",
-      switch_name, key);
+		 switch_name, key);
    }
    ProblemDumpAtEnd(problem) = switch_value;
    NA_FreeNameArray(switch_na);
@@ -282,7 +289,8 @@ int	   solver;   /* Designates the solver from which this routine is
 
    ProblemWellPackage(problem) =
       PFModuleNewModule(WellPackage, (num_phases, num_contaminants));
- 
+
+
    return problem;
 }
 
@@ -365,6 +373,8 @@ Grid          *grid2d;
    ProblemDataTSlopeY(problem_data) = NewVector(grid2d, 1, 1); //sk
    ProblemDataMannings(problem_data) = NewVector(grid2d, 1, 1); //sk
 
+   ProblemDataIndexOfDomainTop(problem_data) = NewVector(grid2d, 1, 1); 
+
    ProblemDataPorosity(problem_data) = NewVector(grid, 1, 1);
 
    ProblemDataBCPressureData(problem_data) = NewBCPressureData();
@@ -406,6 +416,8 @@ ProblemData  *problem_data;
       FreeVector(ProblemDataTSlopeX(problem_data)); //sk
       FreeVector(ProblemDataTSlopeY(problem_data)); //sk
       FreeVector(ProblemDataMannings(problem_data)); //sk
+
+      FreeVector(ProblemDataIndexOfDomainTop(problem_data));
 
       tfree(problem_data);
    }

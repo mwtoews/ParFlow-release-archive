@@ -154,7 +154,7 @@ Vector      **phase_saturations;
 
    double          dx,  dy,  dz, d;
 
-   double         *cp, *wp, *ep, *sp, *np, *lp, *up, *op;
+   double         *cp, *wp, *ep, *sp, *np, *lp, *up, *op = NULL;
    double         *fp;
    double         *ttx_p, *tty_p, *ttz_p;
    double         *tmx_p, *tmy_p, *tmz_p;
@@ -175,7 +175,7 @@ Vector      **phase_saturations;
    int             nx_m, ny_m, nz_m;
 
    int             iv, im, ival;
-   int             sy_v, sz_v, sv;
+   int             sy_v, sz_v, sv=0;
    int             sy_m, sz_m;
 
    int             phase, ipatch, is, i, j, k;
@@ -318,6 +318,8 @@ Vector      **phase_saturations;
 
    ForSubgridI(is, GridSubgrids(grid))
    {
+      f_sub  = VectorSubvector(f, is);
+
       subgrid = GridSubgrid(grid, is);
 	 
       A_sub  = MatrixSubmatrix(A, is);
@@ -669,7 +671,13 @@ Vector      **phase_saturations;
 	    {
 	       tm_p = tmz_pvec[phase];
 	       tt_p = ttz_p;
+	    } 
+	    else 
+	    {
+	       tm_p = 0;
+	       tt_p = 0;
 	    }
+	       
 
 	    tc_p = tc_pvec[phase];
 
@@ -934,7 +942,7 @@ PFModule    *DiscretizePressureInitInstanceXtra(
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
 
-   int            phase, num_phases;
+   int            num_phases;
 
 
    if ( PFModuleInstanceXtra(this_module) == NULL )
@@ -1025,7 +1033,7 @@ void  DiscretizePressureFreeInstanceXtra()
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
 
-   int  phase, num_phases;
+   int  num_phases;
 
 
    if(instance_xtra)
@@ -1085,13 +1093,6 @@ void  DiscretizePressureFreePublicXtra()
 
 int  DiscretizePressureSizeOfTempData()
 {
-   PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra   = PFModuleInstanceXtra(this_module);
-
-   int  phase, num_phases;
    int  sz = 0;
-
-   num_phases = ProblemNumPhases(instance_xtra -> problem);
-
    return sz;
 }

@@ -936,7 +936,7 @@ void WRF2PF(float  *wrf_array,
 	    int     ghost_size_i_upper,
 	    int     ghost_size_j_upper,
 	    Vector *pf_vector,
-	    int    *top);
+	    Vector *top);
 
 void PF2WRF ( Vector *pf_vector,
 	      float  *wrf_array,
@@ -945,10 +945,18 @@ void PF2WRF ( Vector *pf_vector,
 	      int     ghost_size_j_lower,
 	      int     ghost_size_i_upper,
 	      int     ghost_size_j_upper,
-	      int    *top);
+	      Vector *top);
 
-int *ComputeTop (  Problem     *problem,     
-		   ProblemData *problem_data,
-		   Vector      *vector);
+void ComputeTop (  Problem     *problem,     
+		   ProblemData *problem_data
+		   );
 
+int CheckTime(Problem *problem, char *key, double time);
 
+/* evaptranssum.c */
+void EvapTransSum(ProblemData *problem_data, double dt, Vector *evap_trans_sum, Vector *evap_trans);
+
+void OverlandSum(ProblemData *problem_data, 
+		 Vector      *pressure,       /* Current pressure values */
+		 double dt, 
+		 Vector *overland_sum);

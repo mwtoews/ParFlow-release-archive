@@ -166,8 +166,8 @@ double          *data;
 
    int  *loop_array;
 
-   int  *send_proc_array;
-   int  *recv_proc_array;
+   int  *send_proc_array = NULL;
+   int  *recv_proc_array = NULL;
 
    int   num_send_subregions;
    int   num_recv_subregions;
@@ -396,8 +396,6 @@ CommPkg *pkg;
 CommHandle  *InitCommunication(comm_pkg)
 CommPkg     *comm_pkg;
 {
-   int i;
-
    return (CommHandle *)amps_IExchangePackage(comm_pkg -> package);
 }
 
@@ -409,7 +407,7 @@ CommPkg     *comm_pkg;
 void         FinalizeCommunication(handle)
 CommHandle  *handle;
 {
-   amps_Wait((amps_Handle)handle);
+   (void)amps_Wait((amps_Handle)handle);
 }
 
 

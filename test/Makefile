@@ -34,12 +34,20 @@ ifeq (${PARFLOW_HAVE_SILO},yes)
 TESTS += \
 	default_richards_with_silo.tcl \
 	indicator_field.tcl
+
+ifeq (${PARFLOW_HAVE_SILO},yes)
+TESTS += \
+	water_balance_y.tcl \
+	water_balance_x.tcl 
+endif
 endif
 
 check:
 	@-for i in $(TESTS); \
 	do \
 	        make --no-print-directory testclean; \
+		echo "*****************************************************************************"; \
+		echo "Running $$i"; \
 		tclsh $$i; \
 	done
 	@-for i in $(SUBDIRS); \
@@ -63,5 +71,8 @@ testclean:
 	@rm -f *.out.pftcl
 	@rm -f *.pfidb
 	@rm -f *.out.txt
-	@rm -fr default_richards.out indicator_field.out
+	@rm -fr default_richards.out 
+	@rm -fr indicator_field.out
+	@rm -fr water_balance.out
+	@rm -fr default_overland.out
 

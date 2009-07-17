@@ -52,29 +52,8 @@
 #endif
 
 #include <tcl.h>
-#include <tk.h>
 
 #include "databox.h"
-#include "readdatabox.h"
-#include "printdatabox.h"
-#include "velocity.h"
-#include "head.h"
-#include "flux.h"
-#include "stats.h"
-#include "diff.h"
-#include "error.h"
-#include "getsubbox.h"
-#include "enlargebox.h"
-#include "file.h"
-#include "load.h"
-#include "top.h"
-
-#include "region.h"
-#include "grid.h"
-#include "usergrid.h"
-
-#include "general.h"
-
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -149,6 +128,7 @@ int FluxCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char 
 int NewGridCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int NewLabelCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int AxpyCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int SumCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int GetStatsCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int MDiffCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int SaveDiffCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
@@ -156,8 +136,12 @@ int DiffEltCommand P((ClientData clientData , Tcl_Interp *interp , int argc , ch
 int DeleteCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int ComputeTopCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int ExtractTopCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int SurfaceStorageCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int SubsurfaceStorageCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int SurfaceRunoffCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 
 void Axpy(double alpha, Databox *X,  Databox *Y);
+void Sum(Databox *X,  double *sum);
 
 #undef P
 

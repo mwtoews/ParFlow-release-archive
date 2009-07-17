@@ -24,7 +24,7 @@
   License along with this program; if not, write to the Free Software
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
   USA
-**********************************************************************EHEADER*/
+  **********************************************************************EHEADER*/
 
 /*****************************************************************************
  *
@@ -63,6 +63,8 @@ typedef struct
    int                advect_order;
    double             CFL;
    int                max_iterations;
+   int                max_convergence_failures; /* maximum number of convergence 
+						   failures that are allowed */
    double             drop_tol;              /* drop tolerance */
    int                print_subsurf_data;    /* print permeability/porosity? */
    int                print_press;           /* print pressures? */
@@ -77,6 +79,13 @@ typedef struct
    int                write_silo_velocities;      /* write velocities? */
    int                write_silo_satur;           /* write saturations? */
    int                write_silo_concen;          /* write concentrations? */
+   int                write_silo_mask;            /* write mask? */
+   int                write_silo_evaptrans;       /* write evaptrans? */
+   int                write_silo_evaptrans_sum;   /* write evaptrans sum? */
+   int                write_silo_slopes;          /* write slopes? */
+   int                write_silo_mannings;        /* write mannings? */
+   int                write_silo_specific_storage;/* write specific storage? */
+   int                write_silo_overland_sum;    /* write sum of overland outflow? */
 
 } PublicXtra; 
 
@@ -117,6 +126,12 @@ typedef struct
    Vector       *old_saturation;
    Vector       *old_pressure;
    Vector       *mask;
+
+   /* 
+    * Running sum of evaporation and transpiration.
+    */
+   Vector       *evap_trans_sum;
+   Vector       *overland_sum;
 
    /* 
     * sk: Vector that contains the outflow at the boundary 
@@ -201,6 +216,8 @@ void SetupRichards(PFModule *this_module) {
 
    /* do turning bands (and other stuff maybe) */
    PFModuleInvoke(void, set_problem_data, (problem_data));
+   ComputeTop(problem, problem_data);
+
    gr_domain = ProblemDataGrDomain(problem_data);
 
    if ( print_subsurf_data )
@@ -239,10 +256,37 @@ void SetupRichards(PFModule *this_module) {
 
    }
 
+   if ( public_xtra -> write_silo_slopes )
+   {
+      sprintf(file_postfix, "slope_x");
+      WriteSilo(file_prefix, file_postfix, ProblemDataTSlopeX(problem_data),
+                t, 0, "SlopeX");
+
+      sprintf(file_postfix, "slope_y");
+      WriteSilo(file_prefix, file_postfix, ProblemDataTSlopeY(problem_data),
+                t, 0, "SlopeY");
+   }
+
+   if ( public_xtra -> write_silo_mannings )
+   {
+      sprintf(file_postfix, "mannings");
+      WriteSilo(file_prefix, file_postfix, ProblemDataMannings(problem_data),
+                t, 0, "Mannings");
+
+   }
+
+   if ( public_xtra -> write_silo_specific_storage )
+   {
+      sprintf(file_postfix, "specific_storage");
+      WriteSilo(file_prefix, file_postfix, ProblemDataSpecificStorage(problem_data),
+                t, 0, "SpecificStorage");
+
+   }
+
    if(!amps_Rank(amps_CommWorld))
    {
       PrintWellData(ProblemDataWellData(problem_data), 
-      (WELLDATA_PRINTPHYSICAL | WELLDATA_PRINTVALUES));
+		    (WELLDATA_PRINTPHYSICAL | WELLDATA_PRINTVALUES));
    }
 
    /* Check to see if pressure solves are requested */
@@ -304,24 +348,32 @@ void SetupRichards(PFModule *this_module) {
       instance_xtra -> mask = NewVector( grid, 1, 1 );
       InitVectorAll(instance_xtra -> mask, 0.0);
 
+      instance_xtra -> evap_trans_sum = NewVector( grid, 1, 0 );
+      InitVectorAll(instance_xtra -> evap_trans_sum, 0.0);
+
+      if(public_xtra -> write_silo_overland_sum) {
+	 instance_xtra -> overland_sum = NewVector( grid2d, 1, 1 );
+	 InitVectorAll(instance_xtra -> overland_sum, 0.0);
+      }
+
       /* Set initial pressures and pass around ghost data to start */
       PFModuleInvoke(void, ic_phase_pressure, 
-      (instance_xtra -> pressure, instance_xtra -> mask, problem_data, problem));
+		     (instance_xtra -> pressure, instance_xtra -> mask, problem_data, problem));
 	 
       handle = InitVectorUpdate(instance_xtra -> pressure, VectorUpdateAll);
       FinalizeVectorUpdate(handle);
 
       /* Set initial densities and pass around ghost data to start */
       PFModuleInvoke(void, phase_density, 
-      (0, instance_xtra -> pressure, instance_xtra -> density, &dtmp, &dtmp, CALCFCN));
+		     (0, instance_xtra -> pressure, instance_xtra -> density, &dtmp, &dtmp, CALCFCN));
 
       handle = InitVectorUpdate(instance_xtra -> density, VectorUpdateAll);
       FinalizeVectorUpdate(handle);
 
       /* Set initial saturations */
       PFModuleInvoke(void, problem_saturation, 
-      (instance_xtra -> saturation, instance_xtra -> pressure, instance_xtra -> density, gravity, problem_data, 
-      CALCFCN));
+		     (instance_xtra -> saturation, instance_xtra -> pressure, instance_xtra -> density, gravity, problem_data, 
+		      CALCFCN));
 
       handle = InitVectorUpdate(instance_xtra -> pressure, VectorUpdateAll);
       FinalizeVectorUpdate(handle);
@@ -365,10 +417,10 @@ void SetupRichards(PFModule *this_module) {
       if ( print_wells )
       {
 	 WriteWells(file_prefix,
-	 problem,
-	 ProblemDataWellData(problem_data),
-	 t, 
-	 WELLDATA_WRITEHEADER);
+		    problem,
+		    ProblemDataWellData(problem_data),
+		    t, 
+		    WELLDATA_WRITEHEADER);
       }
 
       /*-----------------------------------------------------------------
@@ -415,15 +467,15 @@ void SetupRichards(PFModule *this_module) {
  
       if ( print_satur )
       {
-	 sprintf(file_postfix, "mask.%05d", instance_xtra -> file_number );
+	 sprintf(file_postfix, "mask");
 	 WritePFBinary(file_prefix, file_postfix, instance_xtra -> mask );
 	 any_file_dumped = 1;
       }
 
 
-      if ( public_xtra -> write_silo_satur )
+      if ( public_xtra -> write_silo_mask )
       {
-	 sprintf(file_postfix, "mask.%05d", instance_xtra -> file_number );
+	 sprintf(file_postfix, "mask");
 	 WriteSilo(file_prefix, file_postfix, instance_xtra -> mask, 
                    t, instance_xtra -> file_number, "Mask");
 	 any_file_dumped = 1;
@@ -492,8 +544,6 @@ void AdvanceRichards(PFModule *this_module,
    Problem      *problem           = (public_xtra -> problem);
 
    int           max_iterations      = (public_xtra -> max_iterations);
-   int           print_press         = (public_xtra -> print_press);
-   int           print_velocities    = (public_xtra -> print_velocities);
    int           print_satur         = (public_xtra -> print_satur);
    int           print_wells         = (public_xtra -> print_wells);
 
@@ -510,7 +560,9 @@ void AdvanceRichards(PFModule *this_module,
    int           start_count         = ProblemStartCount(problem);
    double        dump_interval       = ProblemDumpInterval(problem);
 
-  Vector *porosity  = ProblemDataPorosity(problem_data);
+   Vector *porosity                   = ProblemDataPorosity(problem_data);
+   Vector *evap_trans_sum             = instance_xtra -> evap_trans_sum;
+   Vector *overland_sum               = instance_xtra -> overland_sum;
 
 /* sk: Vector that contains the outflow at the boundary*/
    Subgrid      *subgrid;
@@ -526,8 +578,8 @@ void AdvanceRichards(PFModule *this_module,
    int           converged;
    int           take_more_time_steps;
    int           conv_failures;
-   int           max_failures = 60;
-   int           clm_file_dir_length=64; 
+   int           max_failures         = public_xtra -> max_convergence_failures;
+   int           clm_file_dir_length; 
 
    double        t;
    double        ct = 0.0;
@@ -541,7 +593,7 @@ void AdvanceRichards(PFModule *this_module,
    CommHandle   *handle;
 
    char          dt_info;
-   char          file_prefix[64], file_postfix[64], clm_file_dir_local[64];
+   char          file_prefix[64], file_postfix[64];
 
    sprintf(file_prefix, GlobalsOutFileName);
 
@@ -556,7 +608,7 @@ void AdvanceRichards(PFModule *this_module,
    ct = start_time;
    if(compute_time_step) {
       PFModuleInvoke(void, select_time_step, (&cdt, &dt_info, ct, problem,
-      problem_data) );
+					      problem_data) );
    }
    else  // Do not compute timestep
    {
@@ -564,7 +616,7 @@ void AdvanceRichards(PFModule *this_module,
 	 Simply use DT provided; don't use select_time_step module.
 	 Note DT will still be reduced if solution does not converge.
       */
-	cdt = dt;
+      cdt = dt;
    }
    dt = cdt;
 
@@ -602,7 +654,7 @@ void AdvanceRichards(PFModule *this_module,
 
 	 BeginTiming(CLMTimingIndex);
 
-      /* sk: call to the land surface model/subroutine*/
+	 /* sk: call to the land surface model/subroutine*/
 	 //  sk: For the couple with CLM 
 	 int p = GetInt("Process.Topology.P");
 	 int q = GetInt("Process.Topology.Q");
@@ -638,9 +690,9 @@ void AdvanceRichards(PFModule *this_module,
 	    et = SubvectorData(et_sub);
 	    ms = SubvectorData(m_sub);
 	    po_dat = SubvectorData(po_sub);
-	//	 clm_dump_sub = SubvectorData(public_xtra -> clm_dump_interval);
-	//	 clm_file_dir_local = SubvectorData((&public_xtra -> clm_file_dir));
-		 ip = SubvectorEltIndex(p_sub, ix, iy, iz);
+	    //	 clm_dump_sub = SubvectorData(public_xtra -> clm_dump_interval);
+	    //	 clm_file_dir_local = SubvectorData((&public_xtra -> clm_file_dir));
+	    ip = SubvectorEltIndex(p_sub, ix, iy, iz);
 	    
 	    switch (public_xtra -> lsm)
 	    {
@@ -651,12 +703,12 @@ void AdvanceRichards(PFModule *this_module,
 	       }
 	       case 1:
 	       {
-			   printf("%s \n",public_xtra -> clm_file_dir);
-			   clm_file_dir_length=strlen(public_xtra -> clm_file_dir);
-			 //  printf("%s \n",clm_file_dir_local);
-			//   printf("%i \n",clm_file_dir_length);
-		  CALL_CLM_LSM(pp,sp,et,ms,po_dat,dt,t,dx,dy,dz,ix,iy,nx,ny,nz,nx_f,ny_f,nz_f,ip,p,q,r,rank,public_xtra -> clm_dump_interval, public_xtra -> clm_1d_out, public_xtra -> clm_file_dir, clm_file_dir_length, public_xtra -> clm_bin_out_dir);
-			    break;		  
+		  clm_file_dir_length=strlen(public_xtra -> clm_file_dir);
+		  CALL_CLM_LSM(pp,sp,et,ms,po_dat,dt,t,dx,dy,dz,ix,iy,nx,ny,nz,nx_f,ny_f,nz_f,
+			       ip,p,q,r,rank,public_xtra -> clm_dump_interval, 
+			       public_xtra -> clm_1d_out, public_xtra -> clm_file_dir, 
+			       clm_file_dir_length, public_xtra -> clm_bin_out_dir);
+		  break;		  
 	       }
 	       default:
 	       {
@@ -677,6 +729,8 @@ void AdvanceRichards(PFModule *this_module,
 
       do  /* while not converged */
       {
+
+
 
 	 /*
 	   Record amount of memory in use.
@@ -722,15 +776,13 @@ void AdvanceRichards(PFModule *this_module,
 	       /*
 		* if the difference is small don't try to compute
 		* at print_dt, just use dt.  This will
-		* output slightly in time but avoids
+		* output slightly off in time but avoids
 		* extremely small dt values.
 		*/
 	       if( fabs(dt - print_dt) > EPSILON) {
 		  dt = print_dt;
 	       }
 	       dt_info = 'p';
-
-	       instance_xtra -> dump_index++;
 
 	       dump_files = 1;
 	    }
@@ -765,14 +817,14 @@ void AdvanceRichards(PFModule *this_module,
 	  
 	 retval = PFModuleInvoke(int, nonlin_solver, 
 	                         (instance_xtra -> pressure, 
-				 instance_xtra -> density, 
-				 instance_xtra -> old_density, 
-				 instance_xtra -> saturation, 
-				 instance_xtra -> old_saturation, 
-				 t, dt, 
-				 problem_data, instance_xtra -> old_pressure, 
-				 &outflow, evap_trans, 
-				 instance_xtra -> ovrl_bc_flx));
+				  instance_xtra -> density, 
+				  instance_xtra -> old_density, 
+				  instance_xtra -> saturation, 
+				  instance_xtra -> old_saturation, 
+				  t, dt, 
+				  problem_data, instance_xtra -> old_pressure, 
+				  &outflow, evap_trans, 
+				  instance_xtra -> ovrl_bc_flx));
 
 	 if (retval != 0)
 	 {
@@ -780,9 +832,11 @@ void AdvanceRichards(PFModule *this_module,
 	    conv_failures++;
 	 }
 	 else 
+	 {
 	    converged = 1;
+	 }
 
-	 if (conv_failures == max_failures)
+	 if (conv_failures >= max_failures)
 	 {
 	    take_more_time_steps = 0;
 	    if(!amps_Rank(amps_CommWorld))
@@ -807,10 +861,27 @@ void AdvanceRichards(PFModule *this_module,
 
       PFModuleInvoke(void, problem_saturation, 
                      (instance_xtra -> saturation, instance_xtra -> pressure, 
-		     instance_xtra -> density, gravity, problem_data,
-		     CALCFCN));
+		      instance_xtra -> density, gravity, problem_data,
+		      CALCFCN));
 
       any_file_dumped = 0;
+
+      /***************************************************************
+       * Compute running sum of evap trans for water balance 
+       **************************************************************/
+      if(public_xtra -> write_silo_evaptrans_sum) {
+	 EvapTransSum(problem_data, dt, evap_trans_sum, evap_trans);
+      }
+
+      /***************************************************************
+       * Compute running sum of overland outflow for water balance 
+       **************************************************************/
+      if(public_xtra -> write_silo_overland_sum) {
+	 OverlandSum(problem_data, 
+		     instance_xtra -> pressure,
+		     dt, 
+		     instance_xtra -> overland_sum);
+      }
 
       /***************************************************************/
       /*                 Print the pressure and saturation           */
@@ -819,6 +890,8 @@ void AdvanceRichards(PFModule *this_module,
       /* Dump the pressure values at this time-step */
       if ( dump_files )
       {
+	 instance_xtra -> dump_index++;
+
 	 if(public_xtra -> print_press) {
 	    sprintf(file_postfix, "press.%05d", instance_xtra -> file_number);
 	    WritePFBinary(file_prefix, file_postfix, instance_xtra -> pressure);
@@ -847,6 +920,34 @@ void AdvanceRichards(PFModule *this_module,
 	    any_file_dumped = 1;
 	 }
 
+	 if(public_xtra -> write_silo_evaptrans) {
+	    sprintf(file_postfix, "evaptrans.%05d", instance_xtra -> file_number );
+	    WriteSilo(file_prefix, file_postfix, evap_trans, 
+		      t, instance_xtra -> file_number, "EvapTrans");
+	    any_file_dumped = 1;
+	 }
+
+	 if(public_xtra -> write_silo_evaptrans_sum) {
+	    sprintf(file_postfix, "evaptranssum.%05d", instance_xtra -> file_number );
+	    WriteSilo(file_prefix, file_postfix, evap_trans_sum, 
+		      t, instance_xtra -> file_number, "EvapTransSum");
+	    any_file_dumped = 1;
+	    
+	    /* reset sum after output */
+	    PFVConstInit(0.0, evap_trans_sum);
+	 }
+
+	 if(public_xtra -> write_silo_overland_sum) {
+	    sprintf(file_postfix, "overlandsum.%05d", instance_xtra -> file_number );
+	    WriteSilo(file_prefix, file_postfix, overland_sum, 
+		      t, instance_xtra -> file_number, "OverlandSum");
+	    any_file_dumped = 1;
+	    
+	    /* reset sum after output */
+	    PFVConstInit(0.0, overland_sum);
+	 }
+
+
 	 if(public_xtra -> print_lsm_sink) 
 	 {
 	    /*sk Print the sink terms from the land surface model*/
@@ -867,12 +968,12 @@ void AdvanceRichards(PFModule *this_module,
       /***************************************************************/
 
       PFModuleInvoke(void, l2_error_norm,
-      (t, instance_xtra -> pressure, problem_data, &err_norm));
+		     (t, instance_xtra -> pressure, problem_data, &err_norm));
       if( (!amps_Rank(amps_CommWorld)) && (err_norm >= 0.0) )
       {
 	 printf("l2-error in pressure: %20.8e\n", err_norm);
 	 printf("tcl: set pressure_l2_error(%d) %20.8e\n", 
-                     instance_xtra -> iteration_number, err_norm);
+		instance_xtra -> iteration_number, err_norm);
 	 fflush(NULL);
       }
 
@@ -883,10 +984,10 @@ void AdvanceRichards(PFModule *this_module,
       if ( print_wells && dump_files )
       {
 	 WriteWells(file_prefix,
-	 problem,
-	 ProblemDataWellData(problem_data),
-	 t, 
-	 WELLDATA_DONTWRITEHEADER);
+		    problem,
+		    ProblemDataWellData(problem_data),
+		    t, 
+		    WELLDATA_DONTWRITEHEADER);
       }
 
       /*-----------------------------------------------------------------
@@ -961,6 +1062,32 @@ void AdvanceRichards(PFModule *this_module,
 		   t, instance_xtra -> file_number, "Saturation");
 	 any_file_dumped = 1;
       }
+
+      if(public_xtra -> write_silo_evaptrans) {
+	 sprintf(file_postfix, "evaptrans.%05d", instance_xtra -> file_number );
+	 WriteSilo(file_prefix, file_postfix, evap_trans, 
+		   t, instance_xtra -> file_number, "EvapTrans");
+	 any_file_dumped = 1;
+      }
+
+      if(public_xtra -> write_silo_evaptrans_sum) {
+	 sprintf(file_postfix, "evaptranssum.%05d", instance_xtra -> file_number );
+	 WriteSilo(file_prefix, file_postfix, evap_trans_sum, 
+		   t, instance_xtra -> file_number, "EvapTransSum");
+	 any_file_dumped = 1;
+	 /* reset sum after output */
+	 PFVConstInit(0.0, evap_trans_sum);
+      }
+
+      if(public_xtra -> write_silo_overland_sum) {
+	 sprintf(file_postfix, "overlandsum.%05d", instance_xtra -> file_number );
+	 WriteSilo(file_prefix, file_postfix, overland_sum, 
+		   t, instance_xtra -> file_number, "OverlandSum");
+	 any_file_dumped = 1;
+	 
+	 /* reset sum after output */
+	 PFVConstInit(0.0, overland_sum);
+      }
       
       if(public_xtra -> print_lsm_sink) 
       {
@@ -983,14 +1110,14 @@ void AdvanceRichards(PFModule *this_module,
 
 
 void TeardownRichards(PFModule *this_module) {
-  PublicXtra    *public_xtra      = PFModulePublicXtra(this_module);
-  InstanceXtra  *instance_xtra    = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra      = PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra    = PFModuleInstanceXtra(this_module);
 
-  Problem      *problem             = (public_xtra -> problem);
-  ProblemData  *problem_data        = (instance_xtra -> problem_data);
+   Problem      *problem             = (public_xtra -> problem);
+   ProblemData  *problem_data        = (instance_xtra -> problem_data);
 
 
-  int           start_count         = ProblemStartCount(problem);
+   int           start_count         = ProblemStartCount(problem);
 
    FreeVector( instance_xtra -> saturation );
    FreeVector( instance_xtra -> density );
@@ -1000,6 +1127,14 @@ void TeardownRichards(PFModule *this_module) {
    FreeVector( instance_xtra -> pressure );
    FreeVector( instance_xtra -> ovrl_bc_flx );
    FreeVector( instance_xtra -> mask );
+
+   if(instance_xtra -> evap_trans_sum) {
+      FreeVector( instance_xtra -> evap_trans_sum);
+   }
+
+   if(instance_xtra -> overland_sum) {
+      FreeVector(instance_xtra -> overland_sum);
+   }
 
    if(!amps_Rank(amps_CommWorld))
    {
@@ -1028,10 +1163,10 @@ void TeardownRichards(PFModule *this_module) {
 	 {
 	    if ( instance_xtra -> dumped_log[k] == -1 )
 	       fprintf(log_file, "  %06d     %8e   %8e %1c                       %1c\n",
-	       k, instance_xtra -> time_log[k], instance_xtra -> dt_log[k], instance_xtra -> dt_info_log[k], instance_xtra -> recomp_log[k]);
+		       k, instance_xtra -> time_log[k], instance_xtra -> dt_log[k], instance_xtra -> dt_info_log[k], instance_xtra -> recomp_log[k]);
 	    else
 	       fprintf(log_file, "  %06d     %8e   %8e %1c       %06d          %1c\n",
-	       k, instance_xtra -> time_log[k], instance_xtra -> dt_log[k], instance_xtra -> dt_info_log[k], instance_xtra -> dumped_log[k], instance_xtra -> recomp_log[k]);
+		       k, instance_xtra -> time_log[k], instance_xtra -> dt_log[k], instance_xtra -> dt_info_log[k], instance_xtra -> dumped_log[k], instance_xtra -> recomp_log[k]);
 	 }
 
 	 fprintf(log_file, "\n");
@@ -1044,10 +1179,10 @@ void TeardownRichards(PFModule *this_module) {
 	 {
 	    if ( instance_xtra -> dumped_log[k] == -1 )
 	       fprintf(log_file, "  %06d     %8e   %8e       %e\n",
-	       k, instance_xtra -> time_log[k], instance_xtra -> dt_log[k], instance_xtra -> outflow_log[k]);
+		       k, instance_xtra -> time_log[k], instance_xtra -> dt_log[k], instance_xtra -> outflow_log[k]);
 	    else
 	       fprintf(log_file, "  %06d     %8e   %8e       %e\n",
-	       k, instance_xtra -> time_log[k], instance_xtra -> dt_log[k], instance_xtra -> outflow_log[k]);
+		       k, instance_xtra -> time_log[k], instance_xtra -> dt_log[k], instance_xtra -> outflow_log[k]);
 	 } //sk end
       }
       else
@@ -1193,28 +1328,22 @@ PFModule *SolverRichardsInitInstanceXtra()
    (instance_xtra -> problem_data) = NewProblemData(grid,grid2d);
    
    /*-------------------------------------------------------------------
-    * Set up temporary vectors
-    *-------------------------------------------------------------------*/
-
-   // (instance_xtra -> ctemp)           = NewTempVector(grid, 1, 3);
-
-   /*-------------------------------------------------------------------
     * Initialize module instances
     *-------------------------------------------------------------------*/
 
    if ( PFModuleInstanceXtra(this_module) == NULL )
    {
       (instance_xtra -> phase_velocity_face) = NULL;
-	 /*	 PFModuleNewInstance((public_xtra -> phase_velocity_face),
+      /*	 PFModuleNewInstance((public_xtra -> phase_velocity_face),
                  (problem, grid, x_grid, y_grid, z_grid, NULL));
-	 */
-	 /* Need to change for rel. perm. and not mobility */
+      */
+      /* Need to change for rel. perm. and not mobility */
       (instance_xtra -> advect_concen) =
 	 PFModuleNewInstance((public_xtra -> advect_concen),
-	 (problem, grid, NULL));
+			     (problem, grid, NULL));
       (instance_xtra -> set_problem_data) =
 	 PFModuleNewInstance((public_xtra -> set_problem_data),
-	 (problem, grid, grid2d, NULL));
+			     (problem, grid, grid2d, NULL));
 
       (instance_xtra -> retardation) =
 	 PFModuleNewInstance(ProblemRetardation(problem), (NULL));
@@ -1225,11 +1354,11 @@ PFModule *SolverRichardsInitInstanceXtra()
 
       (instance_xtra -> permeability_face) =
 	 PFModuleNewInstance((public_xtra -> permeability_face),
-	 (z_grid));
+			     (z_grid));
 	
       (instance_xtra -> ic_phase_pressure) =
 	 PFModuleNewInstance(ProblemICPhasePressure(problem), 
-	 (problem, grid, NULL));
+			     (problem, grid, NULL));
       (instance_xtra -> problem_saturation) =
 	 PFModuleNewInstance(ProblemSaturation(problem), (grid, NULL));
       (instance_xtra -> phase_density) =
@@ -1240,17 +1369,17 @@ PFModule *SolverRichardsInitInstanceXtra()
 	 PFModuleNewInstance(ProblemL2ErrorNorm(problem), ());
       (instance_xtra -> nonlin_solver) =
 	 PFModuleNewInstance(public_xtra -> nonlin_solver, 
-	 (problem, grid, instance_xtra -> problem_data, NULL));
+			     (problem, grid, instance_xtra -> problem_data, NULL));
 
    }
    else
    {
       PFModuleReNewInstance((instance_xtra -> phase_velocity_face),
-      (problem, grid, x_grid, y_grid, z_grid, NULL));
+			    (problem, grid, x_grid, y_grid, z_grid, NULL));
       PFModuleReNewInstance((instance_xtra -> advect_concen),
-      (problem, grid, NULL));
+			    (problem, grid, NULL));
       PFModuleReNewInstance((instance_xtra -> set_problem_data),
-      (problem, grid, grid2d, NULL));
+			    (problem, grid, grid2d, NULL));
 
       PFModuleReNewInstance((instance_xtra -> retardation), (NULL));
 
@@ -1258,12 +1387,12 @@ PFModule *SolverRichardsInitInstanceXtra()
       PFModuleReNewInstance((instance_xtra -> ic_phase_concen), ());
 
       PFModuleReNewInstance((instance_xtra -> permeability_face),
-      (z_grid));
+			    (z_grid));
 
       PFModuleReNewInstance((instance_xtra -> ic_phase_pressure), 
-      (problem, grid, NULL));
+			    (problem, grid, NULL));
       PFModuleReNewInstance((instance_xtra -> problem_saturation), 
-      (grid, NULL)); 
+			    (grid, NULL)); 
       PFModuleReNewInstance((instance_xtra -> phase_density), ()); 
       PFModuleReNewInstance((instance_xtra -> select_time_step), ()); 
       PFModuleReNewInstance((instance_xtra -> l2_error_norm), ()); 
@@ -1340,14 +1469,14 @@ PFModule *SolverRichardsInitInstanceXtra()
    /* renew concentration advection modules that take temporary data */
    temp_data_placeholder = temp_data;
    PFModuleReNewInstance((instance_xtra -> retardation),
-   (temp_data_placeholder));
+			 (temp_data_placeholder));
    PFModuleReNewInstance((instance_xtra -> advect_concen),
-   (NULL, NULL, temp_data_placeholder));
+			 (NULL, NULL, temp_data_placeholder));
 
    temp_data_placeholder += max(PFModuleSizeOfTempData(
-      instance_xtra -> retardation),
-   PFModuleSizeOfTempData(
-      instance_xtra -> advect_concen));
+				   instance_xtra -> retardation),
+				PFModuleSizeOfTempData(
+				   instance_xtra -> advect_concen));
    /* set temporary vector data used for advection */
 
    temp_data += temp_data_size;
@@ -1426,7 +1555,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    (public_xtra -> phase_velocity_face) = NULL;
    /*     
 	  PFModuleNewModule(PhaseVelocityFace, ());
-    */
+   */
    /* Need to account for rel. perm. and not mobility */
 
    (public_xtra -> advect_concen) = PFModuleNewModule(Godunov, ());
@@ -1449,7 +1578,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
       default:
       {
          InputError("Error: Invalid value <%s> for key <%s>\n", switch_name,
-	 key);
+		    key);
       }
    }
    NA_FreeNameArray(nonlin_switch_na);
@@ -1471,50 +1600,65 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
 	 public_xtra -> lsm = 1;
 #else
          InputError("Error: <%s> used for key <%s> but this version of Parflow is compiled without CLM\n", switch_name, 
-	 key);
+		    key);
 #endif
 	 break;
       }
       default:
       {
          InputError("Error: Invalid value <%s> for key <%s>\n", switch_name,
-	 key);
+		    key);
       }
    }
    NA_FreeNameArray(lsm_switch_na);
-   
-	sprintf(key, "%s.CLM.CLMDumpInterval", name);
-	public_xtra -> clm_dump_interval = GetIntDefault(key,1);
 
-	sprintf(key, "%s.CLM.Print1dOut", name);
-	switch_name = GetStringDefault(key, "False");
-	switch_value = NA_NameToIndex(switch_na, switch_name);
-	if(switch_value < 0)
-	{
-		InputError("Error: invalid print switch value <%s> for key <%s>\n",
-				   switch_name, key );
-	}
-	public_xtra -> clm_1d_out = switch_value;
+   sprintf(key, "%s.CLM.CLMDumpInterval", name);
+   public_xtra -> clm_dump_interval = GetIntDefault(key,1);
 
-	sprintf(key, "%s.CLM.BinaryOutDir", name);
-	switch_name = GetStringDefault(key, "True");
-	switch_value = NA_NameToIndex(switch_na, switch_name);
-	if(switch_value < 0)
-	{
-		InputError("Error: invalid print switch value <%s> for key <%s>\n",
-				   switch_name, key );
-	}
-	public_xtra -> clm_bin_out_dir = switch_value;
+   sprintf(key, "%s.CLM.Print1dOut", name);
+   switch_name = GetStringDefault(key, "False");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid print switch value <%s> for key <%s>\n",
+		 switch_name, key );
+   }
+   public_xtra -> clm_1d_out = switch_value;
+
+   sprintf(key, "%s.CLM.BinaryOutDir", name);
+   switch_name = GetStringDefault(key, "True");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid print switch value <%s> for key <%s>\n",
+		 switch_name, key );
+   }
+   public_xtra -> clm_bin_out_dir = switch_value;
 	
-	sprintf(key, "%s.CLM.CLMFileDir", name);
-	public_xtra -> clm_file_dir = GetStringDefault(key,"");
+   sprintf(key, "%s.CLM.CLMFileDir", name);
+   public_xtra -> clm_file_dir = GetStringDefault(key,"");
 	
    sprintf(key, "%s.MaxIter", name);
    public_xtra -> max_iterations = GetIntDefault(key, 1000000);
+
+   sprintf(key, "%s.MaxConvergenceFailures", name);
+   public_xtra -> max_convergence_failures = GetIntDefault(key,3);
+
+   if (public_xtra -> max_convergence_failures > 9) 
+   {
+      amps_Printf("Warning: Input variable <%s> \n", key);
+      amps_Printf("         is set to a large value that may cause problems\n");
+      amps_Printf("         with how time cycles calculations are evaluated.  Values\n");
+      amps_Printf("         specified via a time cycle may be on/off at the slightly\n"); 
+      amps_Printf("         wrong times times due to how Parflow discretizes time.\n");
+   }
+
    sprintf(key, "%s.AdvectOrder", name);
    public_xtra -> advect_order = GetIntDefault(key,2);
+
    sprintf(key, "%s.CFL", name);
    public_xtra -> CFL = GetDoubleDefault(key, 0.7);
+
    sprintf(key, "%s.DropTol", name);
    public_xtra -> drop_tol = GetDoubleDefault(key, 1E-8);
 
@@ -1524,7 +1668,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid print switch value <%s> for key <%s>\n",
-      switch_name, key);
+		 switch_name, key);
    }
    public_xtra -> print_subsurf_data = switch_value;
 
@@ -1534,7 +1678,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid print switch value <%s> for key <%s>\n",
-      switch_name, key );
+		 switch_name, key );
    }
    public_xtra -> print_press = switch_value;
 
@@ -1544,7 +1688,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid print switch value <%s> for key <%s>\n",
-      switch_name, key );
+		 switch_name, key );
    }
    public_xtra -> print_velocities = switch_value;
 
@@ -1554,7 +1698,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid print switch value <%s> for key <%s>\n",
-      switch_name, key);
+		 switch_name, key);
    }
    public_xtra -> print_satur = switch_value;
 
@@ -1564,7 +1708,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid print switch value <%s> for key <%s>\n",
-      switch_name, key );
+		 switch_name, key );
    }
    public_xtra -> print_concen = switch_value;
 
@@ -1574,7 +1718,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid print switch value <%s> for key <%s>\n",
-      switch_name, key);
+		 switch_name, key);
    }
    public_xtra -> print_wells = switch_value;
 
@@ -1586,7 +1730,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid print switch value <%s> for key <%s>\n",
-      switch_name, key);
+		 switch_name, key);
    }
    public_xtra -> print_lsm_sink = switch_value;
 
@@ -1597,7 +1741,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid value <%s> for key <%s>\n",
-      switch_name, key);
+		 switch_name, key);
    }
    public_xtra -> write_silo_subsurf_data = switch_value;
 
@@ -1607,7 +1751,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid value <%s> for key <%s>\n",
-      switch_name, key );
+		 switch_name, key );
    }
    public_xtra -> write_silo_press = switch_value;
 
@@ -1617,7 +1761,7 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid value <%s> for key <%s>\n",
-      switch_name, key );
+		 switch_name, key );
    }
    public_xtra -> write_silo_velocities = switch_value;
 
@@ -1627,9 +1771,39 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid value <%s> for key <%s>\n",
-      switch_name, key);
+		 switch_name, key);
    }
    public_xtra -> write_silo_satur = switch_value;
+
+   sprintf(key, "%s.WriteSiloEvapTrans", name);
+   switch_name = GetStringDefault(key, "False");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid value <%s> for key <%s>\n",
+		 switch_name, key);
+   }
+   public_xtra -> write_silo_evaptrans = switch_value;
+
+   sprintf(key, "%s.WriteSiloEvapTransSum", name);
+   switch_name = GetStringDefault(key, "False");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid value <%s> for key <%s>\n",
+		 switch_name, key);
+   }
+   public_xtra -> write_silo_evaptrans_sum = switch_value;
+
+   sprintf(key, "%s.WriteSiloOverlandSum", name);
+   switch_name = GetStringDefault(key, "False");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid value <%s> for key <%s>\n",
+		 switch_name, key);
+   }
+   public_xtra -> write_silo_overland_sum = switch_value;
 
    sprintf(key, "%s.WriteSiloConcentration", name);
    switch_name = GetStringDefault(key, "False");
@@ -1637,15 +1811,61 @@ PFModule   *SolverRichardsNewPublicXtra(char *name)
    if(switch_value < 0)
    {
       InputError("Error: invalid value <%s> for key <%s>\n",
-      switch_name, key );
+		 switch_name, key );
    }
    public_xtra -> write_silo_concen = switch_value;
+
+   sprintf(key, "%s.WriteSiloMask", name);
+   switch_name = GetStringDefault(key, "False");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid value <%s> for key <%s>\n",
+		 switch_name, key);
+   }
+   public_xtra -> write_silo_mask = switch_value;
+
+
+   sprintf(key, "%s.WriteSiloSlopes", name);
+   switch_name = GetStringDefault(key, "False");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid value <%s> for key <%s>\n",
+		 switch_name, key );
+   }
+   public_xtra -> write_silo_slopes = switch_value;
+
+   sprintf(key, "%s.WriteSiloMannings", name);
+   switch_name = GetStringDefault(key, "False");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid value <%s> for key <%s>\n",
+		 switch_name, key );
+   }
+   public_xtra -> write_silo_mannings = switch_value;
+
+   sprintf(key, "%s.WriteSiloSpecificStorage", name);
+   switch_name = GetStringDefault(key, "False");
+   switch_value = NA_NameToIndex(switch_na, switch_name);
+   if(switch_value < 0)
+   {
+      InputError("Error: invalid value <%s> for key <%s>\n",
+		 switch_name, key );
+   }
+   public_xtra -> write_silo_specific_storage = switch_value;
 
    if( public_xtra -> write_silo_subsurf_data || 
        public_xtra -> write_silo_press  ||
        public_xtra -> write_silo_velocities ||
        public_xtra -> write_silo_satur ||
-       public_xtra -> write_silo_concen
+       public_xtra -> write_silo_concen ||
+       public_xtra -> write_silo_specific_storage ||
+       public_xtra -> write_silo_slopes ||
+       public_xtra -> write_silo_evaptrans ||
+       public_xtra -> write_silo_evaptrans_sum ||
+       public_xtra -> write_silo_mannings
       ) {
       WriteSiloInit(GlobalsOutFileName);
    }
@@ -1721,7 +1941,7 @@ void      SolverRichards() {
    
    SetupRichards(this_module);
    
-  /*sk Initialize LSM terms*/
+   /*sk Initialize LSM terms*/
    evap_trans = NewVector( grid, 1, 1 );
    InitVectorAll(evap_trans, 0.0);
 
@@ -1750,16 +1970,16 @@ void      SolverRichards() {
  * Getter/Setter methods
  */
 ProblemData *GetProblemDataRichards(PFModule *this_module) {
-  InstanceXtra  *instance_xtra    = PFModuleInstanceXtra(this_module);
-  return (instance_xtra -> problem_data);
+   InstanceXtra  *instance_xtra    = PFModuleInstanceXtra(this_module);
+   return (instance_xtra -> problem_data);
 }
 
 Problem *GetProblemRichards(PFModule *this_module) {
-  PublicXtra    *public_xtra      = PFModulePublicXtra(this_module);
-  return (public_xtra -> problem);
+   PublicXtra    *public_xtra      = PFModulePublicXtra(this_module);
+   return (public_xtra -> problem);
 }
 
 PFModule *GetICPhasePressureRichards(PFModule *this_module) {
-  InstanceXtra  *instance_xtra    = PFModuleInstanceXtra(this_module);
-  return (instance_xtra -> ic_phase_pressure);
+   InstanceXtra  *instance_xtra    = PFModuleInstanceXtra(this_module);
+   return (instance_xtra -> ic_phase_pressure);
 }
