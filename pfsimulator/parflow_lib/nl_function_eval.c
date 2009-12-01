@@ -348,7 +348,7 @@ Vector      *ovrl_bc_flx;     /*sk overland flow boundary fluxes*/
    /* Add in contributions from source terms - user specified sources and
       flux wells.  Calculate phase source values overwriting current 
       saturation vector */
-   PFModuleInvoke(void, phase_source, (source, problem, problem_data,
+   PFModuleInvoke(void, phase_source, (source, 0, problem, problem_data,
    time));
 
    ForSubgridI(is, GridSubgrids(grid))
@@ -1128,8 +1128,9 @@ Vector      *ovrl_bc_flx;     /*sk overland flow boundary fluxes*/
 		  ip   = SubvectorEltIndex(p_sub, i, j, k);
 		  value =  bc_patch_values[ival];
 		  
-		  pp[ip + fdir[0]*1 + fdir[1]*sy_p + fdir[2]*sz_p] = 0;
-		  fp[ip + fdir[0]*1 + fdir[1]*sy_p + fdir[2]*sz_p] = 0;
+		  pp[ip + fdir[0]*1 + fdir[1]*sy_p + fdir[2]*sz_p] = -FLT_MAX;
+//		  fp[ip + fdir[0]*1 + fdir[1]*sy_p + fdir[2]*sz_p] = -FLT_MAX;
+		  fp[ip + fdir[0]*1 + fdir[1]*sy_p + fdir[2]*sz_p] = 0.0;
 		  
 	       });
 	       break;
@@ -1189,7 +1190,7 @@ PFModule    *NlFunctionEvalInitInstanceXtra(Problem     *problem,
       (instance_xtra -> rel_perm_module) =
          PFModuleNewInstance(ProblemPhaseRelPerm(problem), (NULL, NULL) );
       (instance_xtra -> phase_source) =
-         PFModuleNewInstance(ProblemPhaseSource(problem), (grid));
+         PFModuleNewInstance(ProblemPhaseSource(problem), () );
       (instance_xtra -> bc_pressure) =
          PFModuleNewInstance(ProblemBCPressure(problem), (problem) );
       (instance_xtra -> bc_internal) =

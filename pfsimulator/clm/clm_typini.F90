@@ -1,6 +1,6 @@
 !#include <misc.h>
 
-subroutine clm_typini (ntiles, clm)
+subroutine clm_typini (ntiles, clm, istep_pf)
 
 !=========================================================================
 !
@@ -31,6 +31,7 @@ subroutine clm_typini (ntiles, clm)
 
   integer, intent(in)         :: ntiles     !number of tiles
   type (clm1d), intent(inout) :: clm(ntiles)
+  integer, intent(in)         :: istep_pf 
 
 !=== Local Variables =====================================================
 
@@ -46,9 +47,9 @@ subroutine clm_typini (ntiles, clm)
      clm(k)%latdeg = NaN       ! latitude (degrees)
      clm(k)%londeg = NaN       ! longitude (degrees)
                    
-     clm(k)%dtime = NaN       ! model time step [second]
+     clm(k)%dtime = NaN        ! model time step [second]
      clm(k)%dtime_old = NaN 
-     clm(k)%istep = 0         ! number of time step
+     clm(k)%istep = istep_pf   ! number of time step
 
 ! Leaf constants (read into 2-D grid module variables)
 
@@ -102,6 +103,17 @@ subroutine clm_typini (ntiles, clm)
      clm(k)%tksatu(:) = NaN   ! thermal conductivity, saturated soil [W/m-K]  
      clm(k)%rootfr(:) = NaN   ! fraction of roots in each soil layer
 !	 clm(k)%xksat     = NaN   !@ sat hydraulic cond
+     clm(k)%wilting_point = NaN  
+     clm(k)%field_capacity = NaN  
+     clm(k)%res_sat = NaN  
+     clm(k)%vegwaterstresstype = NaN  
+     clm(k)%beta_type = NaN  
+     clm(k)%irr_type  = NaN
+     clm(k)%irr_cycle = NaN
+     clm(k)%irr_rate = NaN
+     clm(k)%irr_start = NaN
+     clm(k)%irr_stop  = NaN
+     clm(k)%irr_threshold = NaN
 
 ! Forcing
 
@@ -239,7 +251,8 @@ subroutine clm_typini (ntiles, clm)
      clm(k)%qflx_top_soil   = NaN  ! net water input into soil from top (mm/s)
      clm(k)%qflx_prec_intr  = NaN  ! interception of precipitation [mm/s]
      clm(k)%qflx_prec_grnd  = NaN  ! water onto ground including canopy runoff [kg/(m2 s)]
-     clm(k)%qflx_qirr       = NaN  ! qflx_surf directed to irrig (mm H2O/s)
+     clm(k)%qflx_qirr       = 0.0d0! qflx_surf directed to irrig (mm H2O/s)  **IMF irrigation applied at surface [mm/s] (added to rain or throughfall, depending) @IMF
+     clm(k)%qflx_qirr_inst(:) = 0.0d0 ! new                                  **IMF irrigation applied by 'instant' method [mm/s] (added to pf_flux) @IMF
      clm(k)%qflx_qrgwl      = NaN  ! qflx_surf at glaciers, wetlands, lakes
      clm(k)%btran           = NaN  ! transpiration wetness factor (0 to 1) 
      clm(k)%smpmax          = NaN  !wilting point potential in mm (new)
