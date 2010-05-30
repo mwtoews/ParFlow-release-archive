@@ -65,14 +65,14 @@ typedef struct
  * ICPhaseConcen
  *--------------------------------------------------------------------------*/
 
-void         ICPhaseConcen(ic_phase_concen, phase, contaminant, problem_data)
-Vector      *ic_phase_concen;
-int          phase;
-int          contaminant;
-ProblemData *problem_data;
+void         ICPhaseConcen(
+Vector      *ic_phase_concen,
+int          phase,
+int          contaminant,
+ProblemData *problem_data)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Grid           *grid = VectorGrid(ic_phase_concen);
 
@@ -200,7 +200,7 @@ PFModule  *ICPhaseConcenInitInstanceXtra()
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 #endif
    instance_xtra = NULL;
 
@@ -216,7 +216,7 @@ PFModule  *ICPhaseConcenInitInstanceXtra()
 void  ICPhaseConcenFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if (instance_xtra)
@@ -229,9 +229,9 @@ void  ICPhaseConcenFreeInstanceXtra()
  * ICPhaseConcenNewPublicXtra
  *--------------------------------------------------------------------------*/
 
-PFModule   *ICPhaseConcenNewPublicXtra(num_phases, num_contaminants)
-int        num_phases;
-int        num_contaminants;
+PFModule   *ICPhaseConcenNewPublicXtra(
+   int        num_phases,
+   int        num_contaminants)
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra;
@@ -359,7 +359,7 @@ int        num_contaminants;
 void  ICPhaseConcenFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    int          num_phases;
    int          num_contaminants;

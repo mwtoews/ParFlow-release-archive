@@ -60,15 +60,15 @@ typedef struct
  *   Solves A x = b.
  *--------------------------------------------------------------------------*/
 
-void   	 WJacobi(x, b, tol, zero)
-Vector 	*x;
-Vector 	*b;
-double 	 tol;
-int    	 zero;
+void   	 WJacobi(
+Vector 	*x,
+Vector 	*b,
+double 	 tol,
+int    	 zero)
 {
    PFModule       *this_module   = ThisPFModule;
-   PublicXtra     *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra   *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra     *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra   *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    double          weight   = (public_xtra -> weight);
    int         	   max_iter = (public_xtra -> max_iter);
@@ -110,6 +110,7 @@ int    	 zero;
 
    CommHandle     *handle = NULL;
 
+   (void) tol;
 
    /*-----------------------------------------------------------------------
     * Begin timing
@@ -313,22 +314,23 @@ int    	 zero;
  * WJacobiInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule     *WJacobiInitInstanceXtra(problem, grid, problem_data, A,
-				      temp_data)
-Problem      *problem;
-Grid         *grid;
-ProblemData  *problem_data;
-Matrix       *A;
-double       *temp_data;
+PFModule     *WJacobiInitInstanceXtra(
+Problem      *problem,
+Grid         *grid,
+ProblemData  *problem_data,
+Matrix       *A,
+double       *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
 
+   (void) problem;
+   (void) problem_data;
 
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -368,7 +370,7 @@ double       *temp_data;
 void  WJacobiFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if(instance_xtra)
@@ -409,7 +411,7 @@ PFModule  *WJacobiNewPublicXtra(char *name)
 void  WJacobiFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
 
    if(public_xtra)

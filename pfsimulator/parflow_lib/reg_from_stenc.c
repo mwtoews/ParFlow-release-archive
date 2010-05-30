@@ -41,14 +41,13 @@
  *   this from compute_reg to get ind_region.
  *--------------------------------------------------------------------------*/
 
-void             ComputeRegFromStencil(dep_reg_ptr, ind_reg_ptr,
-				       cr_array, send_reg, recv_reg, stencil)
-Region         **dep_reg_ptr;
-Region         **ind_reg_ptr;
-SubregionArray  *cr_array;        /* compute region SubregionArray */
-Region          *send_reg;
-Region          *recv_reg;
-Stencil         *stencil;
+void             ComputeRegFromStencil(
+Region         **dep_reg_ptr,
+Region         **ind_reg_ptr,
+SubregionArray  *cr_array,        /* compute region SubregionArray */
+Region          *send_reg,
+Region          *recv_reg,
+Stencil         *stencil)
 {
    Region          *dep_reg;
    Region          *ind_reg;
@@ -60,6 +59,8 @@ Stencil         *stencil;
 
    int              i, j, k;
 
+   (void)recv_reg;
+   (void)stencil;
 
    /*-----------------------------------------------------------------------
     * Set up the dependent region
@@ -139,10 +140,10 @@ Stencil         *stencil;
  * Note: The returned neighbors point to subgrids in the all_subgrids array.
  *--------------------------------------------------------------------------*/
 
-SubgridArray  *GetGridNeighbors(subgrids, all_subgrids, stencil)
-SubgridArray  *subgrids;
-SubgridArray  *all_subgrids;
-Stencil       *stencil;
+SubgridArray  *GetGridNeighbors(
+SubgridArray  *subgrids,
+SubgridArray  *all_subgrids,
+Stencil       *stencil)
 {
    SubgridArray  *neighbors;
 
@@ -221,11 +222,11 @@ Stencil       *stencil;
  *   computational stencil pattern.
  *--------------------------------------------------------------------------*/
 
-void  CommRegFromStencil(send_region_ptr, recv_region_ptr, grid, stencil)
-Region  **send_region_ptr;
-Region  **recv_region_ptr;
-Grid     *grid;
-Stencil  *stencil;
+void  CommRegFromStencil(
+Region  **send_region_ptr,
+Region  **recv_region_ptr,
+Grid     *grid,
+Stencil  *stencil)
 {
    Region        *send_region = NULL;
    Region        *recv_region = NULL;

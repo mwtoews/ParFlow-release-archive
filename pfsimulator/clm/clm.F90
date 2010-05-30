@@ -1,13 +1,14 @@
 !#include <misc.h>
 
-subroutine clm_lsm(pressure,saturation,evap_trans,topo,porosity,istep_pf,dt,time,pdx,pdy,     &
+subroutine clm_lsm(pressure,saturation,evap_trans,topo,porosity,istep_pf,dt,time,start_time,  &
+pdx,pdy,     &
 pdz,ix,iy,nx,ny,nz,nx_f,ny_f,nz_f,ip,npp,npq,npr,rank,sw_pf,lw_pf,prcp_pf,tas_pf,u_pf,        &
 v_pf,patm_pf,qatm_pf,eflx_lh_pf,eflx_lwrad_pf,eflx_sh_pf,eflx_grnd_pf,qflx_tot_pf,            &
 qflx_grnd_pf,qflx_soi_pf,qflx_eveg_pf,qflx_tveg_pf,qflx_in_pf,swe_pf,t_g_pf, t_soi_pf,        &
-clm_dump_interval,clm_1d_out,clm_output_dir, clm_output_dir_length,clm_bin_output_dir,        &
+clm_dump_interval,clm_1d_out,clm_output_dir,clm_output_dir_length,clm_bin_output_dir,         &
 write_CLM_binary,beta_typepf,veg_water_stress_typepf,wilting_pointpf,field_capacitypf,        &
 res_satpf,irr_typepf, irr_cyclepf, irr_ratepf, irr_startpf, irr_stoppf, irr_thresholdpf,      &
-qirr_pf,qirr_inst_pf)
+qirr_pf,qirr_inst_pf,irr_flag_pf,irr_thresholdtypepf)
 
   !=========================================================================
   !
@@ -59,6 +60,7 @@ qirr_pf,qirr_inst_pf)
   !  real(r8) :: res_sat((nx+2)*(ny+2)*(nz+2))      ! residual saturation from ParFlow, on grid w/ ghost nodes for current proc
   real(r8) :: dt                                 ! parflow dt in parflow time units not CLM time units
   real(r8) :: time                               ! parflow time in parflow units
+  real(r8) :: start_time                         ! starting time in parflow units
   real(r8) :: pdx,pdy,pdz                        ! parflow DX, DY and DZ in parflow units
   integer  :: istep_pf                           ! istep, now passed from PF
   integer  :: ix                                 ! parflow ix, starting point for local grid on global grid
@@ -92,13 +94,14 @@ qirr_pf,qirr_inst_pf)
   real(r8) :: qatm_pf((nx+2)*(ny+2)*3)           ! air specific humidity, passed from PF
 
   ! IMF -- For passing irrigation amounts to write as silo in PF
+  real(r8) :: irr_flag_pf((nx+2)*(ny+2)*3)       ! irrigation flag for deficit-based scheduling -- 1 = irrigate, 0 = no-irrigate
   real(r8) :: qirr_pf((nx+2)*(ny+2)*3)           ! irrigation applied above ground -- spray or drip (2D)
   real(r8) :: qirr_inst_pf((nx+2)*(ny+2)*(nlevsoi+2))! irrigation applied below ground -- 'instant' (3D)
 
   integer  :: clm_dump_interval                  ! dump inteval for CLM output, passed from PF, always in interval of CLM timestep, not time
   integer  :: clm_1d_out                         ! whether to dump 1d output 0=no, 1=yes
   integer  :: clm_output_dir_length
-  character (LEN=clm_output_dir_length) :: clm_output_dir                ! output dir location
+  character (LEN=clm_output_dir_length) :: clm_output_dir ! output dir location
   integer  :: clm_bin_output_dir
   integer  :: write_CLM_binary                   ! whether to write CLM output as binary 
 
@@ -114,6 +117,7 @@ qirr_pf,qirr_inst_pf)
   real(r8) :: irr_startpf                        ! irrigation daily start time for constant cycle
   real(r8) :: irr_stoppf                         ! irrigation daily stop tie for constant cycle
   real(r8) :: irr_thresholdpf                    ! irrigation threshold criteria for deficit cycle (units of soil moisture content)
+  integer  :: irr_thresholdtypepf                ! irrigation threshold criteria type -- top layer, bottom layer, column avg
 
   integer  :: j_incr,k_incr                      ! increment for j and k to convert 1D vector to 3D i,j,k array
   integer  :: i,j,k
@@ -158,7 +162,7 @@ qirr_pf,qirr_inst_pf)
 !  l = 1+i + (nx+2)*(j) + (nx+2)*(ny+2)*(k)
 !  print*, 'press(l):',pressure(l)
    
-  if (time == 0.0d0) then ! Check if initialization necessary 
+  if (time == start_time) then ! Check if initialization necessary 
      !open(6,file='clm.out.txt')
      print *,"INITIALIZATION"
      allocate( counter(nx,ny))
@@ -311,8 +315,9 @@ qirr_pf,qirr_inst_pf)
         clm(t)%irr_rate  = irr_ratepf
         clm(t)%irr_start = irr_startpf
         clm(t)%irr_stop  = irr_stoppf
-        clm(t)%irr_threshold = irr_thresholdpf     
-
+        clm(t)%irr_threshold  = irr_thresholdpf     
+        clm(t)%threshold_type = irr_thresholdtypepf
+ 
         ! set clm watsat, tksatu from PF porosity
         ! convert t to i,j index
         i=tile(t)%col        
@@ -419,7 +424,7 @@ qirr_pf,qirr_inst_pf)
 
   !    call drv_almaout (drv, tile, clm) !@ This routine was already inactivated in the original tar file 
   if (clm_1d_out == 1) &
-       call drv_1dout (drv, tile,clm,rank)
+       call drv_1dout (drv, tile,clm)
 
   !@== Stefan: call 2D output routine
   ! @RMM now we only call for every clm_dump_interval steps (not 
@@ -438,13 +443,13 @@ qirr_pf,qirr_inst_pf)
         !print*, clm(1)
         !print *,clm(1)%istep
         call open_files(clm,drv,rank,ix,iy,istep_pf,clm_output_dir, clm_output_dir_length,clm_bin_output_dir) 
-        call drv_2dout (drv,grid,clm,rank)
+        call drv_2dout (drv,grid,clm)
         !@==  Call to subroutine to close (2D-) output files
         !@==  RMM modified to open/close files (but to include istep) every 
         !@== time step 
         !!if (drv%endtime /= 0)  call close_files(clm,drv,rank)
         !print*, "close files"
-        call close_files(clm,drv,rank)
+        call close_files(clm,drv)
      end if ! write_CLM_binary
   end if  ! mod of istep and dump_interval
 
@@ -467,6 +472,7 @@ qirr_pf,qirr_inst_pf)
      swe_pf(l)=clm(t)%h2osno 
      t_g_pf(l)=clm(t)%t_grnd
      qirr_pf(l)=clm(t)%qflx_qirr
+     irr_flag_pf(l)=clm(t)%irr_flag
   enddo
 
   !3D arrays (tsoil)
@@ -483,6 +489,7 @@ qirr_pf,qirr_inst_pf)
   enddo
 
   !=== Write Daily Restarts
+  print*, 'time =', time, 'gmt =', drv%gmt, 'endtime =', drv%endtime
   if (drv%gmt==0..or.drv%endtime==1) call drv_restart(2,drv,tile,clm,rank,istep_pf)
   ! call drv_restart(2,drv,tile,clm,rank)
   ! call PF couple, this transfers ET from CLM to ParFlow 

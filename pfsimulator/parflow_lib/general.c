@@ -39,6 +39,9 @@
 #include <malloc.h>
 #endif
 
+#include <unistd.h>
+#include <sys/stat.h>
+
 amps_ThreadLocalDcl(int, s_max_memory);
 
 #ifdef PF_MEMORY_ALLOC_CHECK
@@ -111,8 +114,7 @@ int    line;
  *   If no such integer e exists, return -1.
  *--------------------------------------------------------------------------*/
 
-int  Exp2(p)
-int  p;
+int  Exp2(int  p)
 {
    int  e = 0;
 
@@ -216,6 +218,37 @@ void printMaxMemory(FILE *log_file)
    amps_FreeInvoice(invoice);
 
 #endif
+
+
+   /*
+    * Print out info from Linux proc file.
+    */
+
+#ifdef __linux__
+   if (!amps_Rank(amps_CommWorld)) {
+      char procfilename[2056];
+
+      sprintf(procfilename, "/proc/%d/status", getpid());
+
+      fprintf(log_file, "\n\nBEGIN(Contents of %s)\n", procfilename); 
+
+      struct stat stats;
+      if(!stat(procfilename, &stats)) {
+	 FILE *file;
+	 int c;
+
+	 file = fopen(procfilename, "r");
+      
+	 while((c = fgetc(file)) != EOF) {
+	    fputc(c, log_file);
+	 }
+      
+	 fclose(file);
+
+	 fprintf(log_file, "\n\nEND(Contents of %s)\n", procfilename); 
+      }
+   }
+#endif
 }
 
 
@@ -239,9 +272,9 @@ void printMaxMemory(FILE *log_file)
 */
 void printMemoryInfo(FILE *log_file) 
 {
-   
-#ifdef HAVE_MALLINFO
+   (void) log_file;
 
+#ifdef HAVE_MALLINFO
    /* Get malloc info structure */
    struct mallinfo my_mallinfo = mallinfo();
    
@@ -258,6 +291,7 @@ void printMemoryInfo(FILE *log_file)
    /* Get number of items currently allocated */
    int number_allocated = my_mallinfo.ordblks + my_mallinfo.smblks;
 
+   (void) log_file;
    
    /* Record high-water mark for memory used. */
    if(amps_ThreadLocal(s_max_memory) < used_mem) 

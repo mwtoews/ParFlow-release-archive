@@ -57,16 +57,17 @@ typedef struct
  *   RDF Assumes initial guess of 0.
  *--------------------------------------------------------------------------*/
 
-void   	 Chebyshev(x, b, tol, zero, ia, ib, num_iter)
-Vector 	*x;
-Vector 	*b;
-double 	 tol;
-int    	 zero;
-double 	 ia, ib;
-int    	 num_iter;
+void   	 Chebyshev(
+   Vector 	*x,
+   Vector 	*b,
+   double 	 tol,
+   int    	 zero,
+   double 	 ia, 
+   double        ib,
+   int    	 num_iter)
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra  *)PFModuleInstanceXtra(this_module);
 
    Matrix    *A         = (instance_xtra -> A);
 
@@ -78,6 +79,8 @@ int    	 num_iter;
 
    int     i = 0;
 
+   (void) tol;
+   (void) zero;
 
    /*-----------------------------------------------------------------------
     * Begin timing
@@ -165,22 +168,23 @@ int    	 num_iter;
  * ChebyshevInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule     *ChebyshevInitInstanceXtra(problem, grid, problem_data, A,
-					temp_data)
-Problem      *problem;
-Grid         *grid;
-ProblemData  *problem_data;
-Matrix       *A;
-double       *temp_data;
+PFModule     *ChebyshevInitInstanceXtra(
+   Problem      *problem,
+   Grid         *grid,
+   ProblemData  *problem_data,
+   Matrix       *A,
+   double       *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
 
+   (void) problem;
+   (void) problem_data;
 
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra  *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -220,7 +224,7 @@ double       *temp_data;
 void  ChebyshevFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra  *)PFModuleInstanceXtra(this_module);
 
 
    if(instance_xtra)
@@ -239,6 +243,8 @@ PFModule   *ChebyshevNewPublicXtra(char *name)
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra;
 
+   (void) name;
+
    public_xtra = NULL;
 
    PFModulePublicXtra(this_module) = public_xtra;
@@ -253,7 +259,7 @@ PFModule   *ChebyshevNewPublicXtra(char *name)
 void  ChebyshevFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    if(public_xtra)
    {

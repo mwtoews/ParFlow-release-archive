@@ -83,15 +83,15 @@ typedef struct
  *   code will generate.
  *--------------------------------------------------------------------------*/
 
-void          TurningBandsRF(geounit, gr_geounit, field, cdata)
-GeomSolid    *geounit;
-GrGeomSolid  *gr_geounit;
-Vector       *field;
-RFCondData   *cdata;
+void          TurningBandsRF(
+GeomSolid    *geounit,
+GrGeomSolid  *gr_geounit,
+Vector       *field,
+RFCondData   *cdata)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    double      lambdaX    = (public_xtra -> lambdaX);
    double      lambdaY    = (public_xtra -> lambdaY);
@@ -414,9 +414,9 @@ RFCondData   *cdata;
  * TurningBandsRFInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *TurningBandsRFInitInstanceXtra(grid, temp_data)
-Grid      *grid;
-double    *temp_data;
+PFModule  *TurningBandsRFInitInstanceXtra(
+   Grid      *grid,
+   double    *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
@@ -425,7 +425,7 @@ double    *temp_data;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -460,7 +460,7 @@ double    *temp_data;
 void  TurningBandsRFFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if(instance_xtra)
@@ -557,7 +557,7 @@ PFModule   *TurningBandsRFNewPublicXtra(char *geom_name)
 void  TurningBandsRFFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
 
    if(public_xtra)

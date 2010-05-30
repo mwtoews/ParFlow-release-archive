@@ -69,11 +69,11 @@ typedef struct
  * SetProblemData
  *--------------------------------------------------------------------------*/
 
-void          SetProblemData(problem_data)
-ProblemData  *problem_data;
+void          SetProblemData(
+   ProblemData  *problem_data)
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    PFModule      *geometries   = (instance_xtra -> geometries);
    PFModule      *domain       = (instance_xtra -> domain);
@@ -87,44 +87,45 @@ ProblemData  *problem_data;
    PFModule      *mann         = (instance_xtra -> mann); //sk
 
    /* Note: the order in which these modules are called is important */
-   PFModuleInvoke(void, wells, (problem_data));
+   PFModuleInvokeType(WellPackageInvoke, wells, (problem_data));
    if ( (instance_xtra -> site_data_not_formed) )
    {
-      PFModuleInvoke(void, geometries, (problem_data));
-      PFModuleInvoke(void, domain, (problem_data));
+      PFModuleInvokeType(GeometriesInvoke, geometries, (problem_data));
+      PFModuleInvokeType(DomainInvoke, domain, (problem_data));
 
-      PFModuleInvoke(void, permeability,
-		     (problem_data,
-		      ProblemDataPermeabilityX(problem_data),
-		      ProblemDataPermeabilityY(problem_data),
-		      ProblemDataPermeabilityZ(problem_data),
-		      ProblemDataNumSolids(problem_data),
-                      ProblemDataSolids(problem_data),
-                      ProblemDataGrSolids(problem_data)));
-      PFModuleInvoke(void, porosity,
-		     (problem_data,
-                      ProblemDataPorosity(problem_data),
-		      ProblemDataNumSolids(problem_data),
-                      ProblemDataSolids(problem_data),
-                      ProblemDataGrSolids(problem_data)));
-      PFModuleInvoke(void, specific_storage,                 //sk
-		     (problem_data,
-		      ProblemDataSpecificStorage(problem_data)));
-      PFModuleInvoke(void, x_slope,                 //sk
-		     (problem_data,
-		      ProblemDataTSlopeX(problem_data),
-                      ProblemDataPorosity(problem_data)));
-      PFModuleInvoke(void, y_slope,                 //sk
-		     (problem_data,
-		      ProblemDataTSlopeY(problem_data),
-                      ProblemDataPorosity(problem_data)));
-      PFModuleInvoke(void, mann,                 //sk
-		     (problem_data,
-		      ProblemDataMannings(problem_data),
-                      ProblemDataPorosity(problem_data)));
+      PFModuleInvokeType(SubsrfSimInvoke, permeability,
+			 (problem_data,
+			  ProblemDataPermeabilityX(problem_data),
+			  ProblemDataPermeabilityY(problem_data),
+			  ProblemDataPermeabilityZ(problem_data),
+			  ProblemDataNumSolids(problem_data),
+			  ProblemDataSolids(problem_data),
+			  ProblemDataGrSolids(problem_data)));
+      PFModuleInvokeType(PorosityInvoke, porosity,
+			 (problem_data,
+			  ProblemDataPorosity(problem_data),
+			  ProblemDataNumSolids(problem_data),
+			  ProblemDataSolids(problem_data),
+			  ProblemDataGrSolids(problem_data)));
+      PFModuleInvokeType(SpecStorageInvoke, specific_storage,                 //sk
+			 (problem_data,
+			  ProblemDataSpecificStorage(problem_data)));
+      PFModuleInvokeType(SlopeInvoke, x_slope,                 //sk
+			 (problem_data,
+			  ProblemDataTSlopeX(problem_data),
+			  ProblemDataPorosity(problem_data)));
+      PFModuleInvokeType(SlopeInvoke, y_slope,                 //sk
+			 (problem_data,
+			  ProblemDataTSlopeY(problem_data),
+			  ProblemDataPorosity(problem_data)));
+      PFModuleInvokeType(ManningsInvoke, mann,                 //sk
+			 (problem_data,
+			  ProblemDataMannings(problem_data),
+			  ProblemDataPorosity(problem_data)));
       (instance_xtra -> site_data_not_formed) = 0;
    }
-   PFModuleInvoke(void, bc_pressure, (problem_data));
+
+   PFModuleInvokeType(BCPressurePackageInvoke, bc_pressure, (problem_data));
 }
 
 
@@ -132,19 +133,21 @@ ProblemData  *problem_data;
  * SetProblemDataInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *SetProblemDataInitInstanceXtra(problem, grid, grid2d, temp_data)
-Problem   *problem;
-Grid      *grid,*grid2d;
-double    *temp_data;
+PFModule  *SetProblemDataInitInstanceXtra(
+   Problem   *problem,
+   Grid      *grid,
+   Grid      *grid2d,
+   double    *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
 
+   (void) grid2d;
 
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with `problem'
@@ -174,21 +177,25 @@ double    *temp_data;
    if ( PFModuleInstanceXtra(this_module) == NULL )
    {
       (instance_xtra -> geometries) =
-         PFModuleNewInstance(ProblemGeometries(problem), (grid));
+         PFModuleNewInstanceType(GeometriesInitInstanceXtraInvoke, ProblemGeometries(problem), (grid));
       (instance_xtra -> domain) =
-         PFModuleNewInstance(ProblemDomain(problem), (grid));
+         PFModuleNewInstanceType(DomainInitInstanceXtraInvoke, ProblemDomain(problem), (grid));
       (instance_xtra -> permeability) =
-         PFModuleNewInstance(ProblemPermeability(problem), (grid, temp_data));
+         PFModuleNewInstanceType(SubsrfSimInitInstanceXtraInvoke, ProblemPermeability(problem), (grid, temp_data));
       (instance_xtra -> porosity) =
-         PFModuleNewInstance(ProblemPorosity(problem), (grid, temp_data));
+         PFModuleNewInstanceType(SubsrfSimInitInstanceXtraInvoke,
+				 ProblemPorosity(problem), (grid, temp_data));
       (instance_xtra -> specific_storage) =                                   //sk
 	     PFModuleNewInstance(ProblemSpecStorage(problem), ());
       (instance_xtra -> x_slope) =                                   //sk
-	     PFModuleNewInstance(ProblemXSlope(problem), (grid));
+	 PFModuleNewInstanceType(SlopeInitInstanceXtraInvoke, 
+				 ProblemXSlope(problem), (grid));
       (instance_xtra -> y_slope) =                                   //sk
-	     PFModuleNewInstance(ProblemYSlope(problem), (grid));
+	 PFModuleNewInstanceType(SlopeInitInstanceXtraInvoke,
+				 ProblemYSlope(problem), (grid));
       (instance_xtra -> mann) =                                   //sk
-	     PFModuleNewInstance(ProblemMannings(problem), (grid));
+	 PFModuleNewInstanceType(ManningsInitInstanceXtraInvoke,
+				 ProblemMannings(problem), (grid));
 
       (instance_xtra -> site_data_not_formed) = 1;
 
@@ -196,24 +203,33 @@ double    *temp_data;
           PFModuleNewInstance(ProblemWellPackage(problem), ());
 
       (instance_xtra -> bc_pressure) =
-          PFModuleNewInstance(ProblemBCPressurePackage(problem), (problem));
-
+	 PFModuleNewInstanceType(BCPressurePackageInitInstanceXtraInvoke,
+				 ProblemBCPressurePackage(problem), (problem));
    }
    else
    {
-      PFModuleReNewInstance((instance_xtra -> geometries), (grid));
-      PFModuleReNewInstance((instance_xtra -> domain), (grid));
-      PFModuleReNewInstance((instance_xtra -> permeability),
-			    (grid, temp_data));
-      PFModuleReNewInstance((instance_xtra -> porosity),
-			    (grid, temp_data));
+      PFModuleReNewInstanceType(GeometriesInitInstanceXtraInvoke,
+				(instance_xtra -> geometries), (grid));
+      PFModuleReNewInstanceType(DomainInitInstanceXtraInvoke, 
+				(instance_xtra -> domain), (grid));
+      PFModuleReNewInstanceType(SubsrfSimInitInstanceXtraInvoke,
+				(instance_xtra -> permeability),
+				(grid, temp_data));
+      PFModuleReNewInstanceType(SubsrfSimInitInstanceXtraInvoke,
+				(instance_xtra -> porosity),
+				(grid, temp_data));
       PFModuleReNewInstance((instance_xtra -> specific_storage), ());    //sk
-      PFModuleReNewInstance((instance_xtra -> x_slope), (grid));    //sk
-      PFModuleReNewInstance((instance_xtra -> y_slope), (grid));    //sk
-      PFModuleReNewInstance((instance_xtra -> mann), (grid));    //sk
+      PFModuleReNewInstanceType(SlopeInitInstanceXtraInvoke, 
+				(instance_xtra -> x_slope), (grid));    //sk
+      PFModuleReNewInstanceType(SlopeInitInstanceXtraInvoke, 
+				(instance_xtra -> y_slope), (grid));    //sk
+      PFModuleReNewInstanceType(ManningsInitInstanceXtraInvoke,
+				(instance_xtra -> mann), (grid));    //sk
       PFModuleReNewInstance((instance_xtra -> wells), ());
-      PFModuleReNewInstance((instance_xtra -> bc_pressure), (problem));
+      PFModuleReNewInstanceType(BCPressurePackageInitInstanceXtraInvoke,
+				(instance_xtra -> bc_pressure), (problem));
    }
+
 
    PFModuleInstanceXtra(this_module) = instance_xtra;
    return this_module;
@@ -227,7 +243,7 @@ double    *temp_data;
 void  SetProblemDataFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if(instance_xtra)
@@ -276,7 +292,7 @@ PFModule   *SetProblemDataNewPublicXtra()
 void  SetProblemDataFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
 
    if(public_xtra)
@@ -293,7 +309,7 @@ void  SetProblemDataFreePublicXtra()
 int       SetProblemDataSizeOfTempData()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra   = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra   = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    int  sz = 0;
 

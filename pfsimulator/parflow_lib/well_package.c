@@ -100,11 +100,11 @@ typedef struct
  * WellPackage
  *--------------------------------------------------------------------------*/
 
-void         WellPackage(problem_data)
-ProblemData *problem_data;
+void         WellPackage(
+   ProblemData *problem_data)
 {
    PFModule         *this_module   = ThisPFModule;
-   PublicXtra       *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra       *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0            *dummy0;
    Type1            *dummy1;
@@ -794,7 +794,7 @@ PFModule *WellPackageInitInstanceXtra()
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 #endif
    instance_xtra = NULL;
 
@@ -810,7 +810,7 @@ PFModule *WellPackageInitInstanceXtra()
 void  WellPackageFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    if (instance_xtra)
    {
@@ -823,9 +823,9 @@ void  WellPackageFreeInstanceXtra()
  * WellPackageNewPublicXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *WellPackageNewPublicXtra(num_phases, num_contaminants)
-int        num_phases;
-int        num_contaminants;
+PFModule  *WellPackageNewPublicXtra(
+   int        num_phases,
+   int        num_contaminants)
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra;
@@ -1386,7 +1386,7 @@ int        num_contaminants;
 void  WellPackageFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0         *dummy0;
    Type1         *dummy1;

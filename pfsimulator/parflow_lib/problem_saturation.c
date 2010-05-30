@@ -114,22 +114,20 @@ typedef struct
  *    This routine returns a Vector of saturations based on pressures.
  *--------------------------------------------------------------------------*/
 
-void	 Saturation(phase_saturation, phase_pressure, phase_density, 
-		    gravity, problem_data, fcn)
-
-Vector      *phase_saturation;  /* Vector of return saturations */
-Vector      *phase_pressure;    /* Vector of pressures */
-Vector      *phase_density;     /* Vector of densities */
-double       gravity;           /* Magnitude of gravity in neg. z direction */
-ProblemData *problem_data;      /* Contains geometry info. for the problem */
-int          fcn;               /* Flag determining what to calculate 
+void	 Saturation(
+Vector      *phase_saturation,  /* Vector of return saturations */
+Vector      *phase_pressure,    /* Vector of pressures */
+Vector      *phase_density,     /* Vector of densities */
+double       gravity,           /* Magnitude of gravity in neg. z direction */
+ProblemData *problem_data,      /* Contains geometry info. for the problem */
+int          fcn)               /* Flag determining what to calculate 
                                  * fcn = CALCFCN => calculate the function
 				 *                  value
                                  * fcn = CALCDER => calculate the function 
                                  *                  derivative */
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0         *dummy0;
    Type1         *dummy1;
@@ -677,12 +675,12 @@ int          fcn;               /* Flag determining what to calculate
  * SaturationInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *SaturationInitInstanceXtra(grid, temp_data)
-Grid      *grid;
-double    *temp_data;
+PFModule  *SaturationInitInstanceXtra(
+   Grid      *grid,
+   double    *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
    InstanceXtra  *instance_xtra;
 
    Type1         *dummy1;
@@ -691,7 +689,7 @@ double    *temp_data;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -789,7 +787,7 @@ double    *temp_data;
 void  SaturationFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if (instance_xtra)
@@ -1080,7 +1078,7 @@ PFModule   *SaturationNewPublicXtra()
 void  SaturationFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0       *dummy0;
    Type1       *dummy1;
@@ -1198,7 +1196,7 @@ void  SaturationFreePublicXtra()
 int  SaturationSizeOfTempData()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type1         *dummy1;
 

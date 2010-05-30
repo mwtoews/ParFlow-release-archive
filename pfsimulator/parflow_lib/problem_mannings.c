@@ -71,13 +71,10 @@ typedef struct
  * Mannings
  *--------------------------------------------------------------------------*/
 
-void         Mannings(problem_data, mann, dummy)
-Vector      *mann;
-ProblemData *problem_data;
-Vector      *dummy;
+void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Grid             *grid = VectorGrid(dummy);
 
@@ -344,11 +341,11 @@ Vector      *dummy;
  * ManningsInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *ManningsInitInstanceXtra(grid)
-Grid    *grid;
+PFModule  *ManningsInitInstanceXtra(
+   Grid    *grid)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
    InstanceXtra  *instance_xtra;
 
    Type2  *dummy2;
@@ -356,7 +353,7 @@ Grid    *grid;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    if (grid != NULL)
    {
@@ -386,8 +383,8 @@ Grid    *grid;
 void  ManningsFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    Type2  *dummy2;
 
@@ -519,7 +516,7 @@ PFModule  *ManningsNewPublicXtra()
 void  ManningsFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0       *dummy0;
    Type1       *dummy1;

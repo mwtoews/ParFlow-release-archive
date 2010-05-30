@@ -69,19 +69,19 @@ typedef struct
  * PGSRF
  *--------------------------------------------------------------------------*/
 
-void         PGSRF(geounit, gr_geounit, field, cdata)
-GeomSolid    *geounit;
-GrGeomSolid  *gr_geounit;
-Vector       *field;
-RFCondData   *cdata;
+void         PGSRF(
+GeomSolid    *geounit,
+GrGeomSolid  *gr_geounit,
+Vector       *field,
+RFCondData   *cdata)
 {
 
   /*-----------------*
    * Local variables *
    *-----------------*/
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /* Input parameters (see PGSRFNewPublicXtra() below) */
    double    lambdaX        = (public_xtra -> lambdaX);
@@ -176,6 +176,8 @@ RFCondData   *cdata;
    double    cx, cy, cz;
    double    sum;
    double    Tiny = 1.0e-12;
+
+   (void) geounit;
 
    /*-----------------------------------------------------------------------
     * Allocate temp vectors
@@ -879,17 +881,19 @@ RFCondData   *cdata;
  * PGSRFInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *PGSRFInitInstanceXtra(grid, temp_data)
-Grid      *grid;
-double    *temp_data;
+PFModule  *PGSRFInitInstanceXtra(
+   Grid      *grid,
+   double    *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
 
+   (void) temp_data;
+
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -913,7 +917,7 @@ double    *temp_data;
 void  PGSRFFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if(instance_xtra)
@@ -996,7 +1000,12 @@ PFModule   *PGSRFNewPublicXtra(char *geom_name)
    /* The maximum search radius is currently limited
    by the PGSRF routine. It is set here to allow 
    possible user control in the future. */
-   (public_xtra -> max_search_rad) = 4;
+   /*(public_xtra -> max_search_rad) = 4;
+    added max search rad as a key to improve correlation structure of
+    RF in testing
+    */
+    sprintf(key, "Geom.%s.Perm.MaxSearchRad", geom_name);
+    public_xtra -> max_search_rad = GetInt(key);
 
    (public_xtra -> time_index) = RegisterTiming("PGS RF");
 
@@ -1012,7 +1021,7 @@ PFModule   *PGSRFNewPublicXtra(char *geom_name)
 void  PGSRFFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    if(public_xtra)
    {

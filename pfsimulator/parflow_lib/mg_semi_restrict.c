@@ -38,16 +38,15 @@
  * MGSemiRestrict
  *--------------------------------------------------------------------------*/
 
-void           	 MGSemiRestrict(A_f, r_f, r_c, P, f_sr_array, c_sr_array,
-				compute_pkg, r_f_comm_pkg)
-Matrix         	*A_f;
-Vector         	*r_f;
-Vector         	*r_c;
-Matrix         	*P;
-SubregionArray  *f_sr_array;
-SubregionArray  *c_sr_array;
-ComputePkg      *compute_pkg;
-CommPkg         *r_f_comm_pkg;
+void           	 MGSemiRestrict(
+Matrix         	*A_f,
+Vector         	*r_f,
+Vector         	*r_c,
+Matrix         	*P,
+SubregionArray  *f_sr_array,
+SubregionArray  *c_sr_array,
+ComputePkg      *compute_pkg,
+CommPkg         *r_f_comm_pkg)
 {
    SubregionArray *subregion_array;
 
@@ -81,6 +80,9 @@ CommPkg         *r_f_comm_pkg;
 
    CommHandle     *handle = NULL;
 
+   (void) A_f;
+   (void) f_sr_array;
+   (void) c_sr_array;
 
    /*--------------------------------------------------------------------
     * Compute r_c in c_sr_array
@@ -182,15 +184,14 @@ CommPkg         *r_f_comm_pkg;
  * NewMGSemiRestrictComputePkg
  *--------------------------------------------------------------------------*/
 
-ComputePkg   *NewMGSemiRestrictComputePkg(grid, stencil,
-					  sx, sy, sz, c_index, f_index)
-Grid         *grid;
-Stencil      *stencil;
-int           sx;
-int           sy;
-int           sz;
-int           c_index;
-int           f_index;
+ComputePkg   *NewMGSemiRestrictComputePkg(
+Grid         *grid,
+Stencil      *stencil,
+int           sx,
+int           sy,
+int           sz,
+int           c_index,
+int           f_index)
 {
    ComputePkg  *compute_pkg;
 

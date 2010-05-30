@@ -97,22 +97,21 @@ typedef struct
  *    pressures.
  *--------------------------------------------------------------------------*/
 
-void         PhaseRelPerm(phase_rel_perm, phase_pressure, phase_density, 
-			  gravity, problem_data, fcn)
+void         PhaseRelPerm(
 
-Vector      *phase_rel_perm; /* Vector of return rel. perms. at each block */
-Vector      *phase_pressure; /* Vector of pressures at each block */
-Vector      *phase_density;  /* Vector of densities at each block */
-double       gravity;        /* Magnitude of gravity in neg. z direction */
-ProblemData *problem_data;   /* Contains geometry info for the problem */
-int          fcn;            /* Flag determining what to calculate 
+Vector      *phase_rel_perm, /* Vector of return rel. perms. at each block */
+Vector      *phase_pressure, /* Vector of pressures at each block */
+Vector      *phase_density,  /* Vector of densities at each block */
+double       gravity,        /* Magnitude of gravity in neg. z direction */
+ProblemData *problem_data,   /* Contains geometry info for the problem */
+int          fcn)            /* Flag determining what to calculate 
                               * fcn = CALCFCN => calculate the function value
                               * fcn = CALCDER => calculate the function 
                               *                  derivative */
 
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Grid          *grid = VectorGrid(phase_rel_perm);
 
@@ -994,13 +993,12 @@ int          fcn;            /* Flag determining what to calculate
  * PhaseRelPermInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *PhaseRelPermInitInstanceXtra(grid, temp_data)
-
-Grid   *grid;
-double *temp_data;
+PFModule  *PhaseRelPermInitInstanceXtra(
+   Grid   *grid,
+   double *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
    InstanceXtra  *instance_xtra;
 
    Type1         *dummy1;
@@ -1008,7 +1006,7 @@ double *temp_data;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    if ( grid != NULL )
    {
@@ -1049,7 +1047,7 @@ double *temp_data;
 void  PhaseRelPermFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if (instance_xtra)
@@ -1285,7 +1283,7 @@ PFModule   *PhaseRelPermNewPublicXtra()
 void  PhaseRelPermFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0       *dummy0;
    Type1       *dummy1;
@@ -1382,7 +1380,7 @@ void  PhaseRelPermFreePublicXtra()
 int  PhaseRelPermSizeOfTempData()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type1         *dummy1;
 

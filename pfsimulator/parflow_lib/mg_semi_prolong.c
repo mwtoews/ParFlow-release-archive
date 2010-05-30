@@ -38,16 +38,15 @@
  * MGSemiProlong
  *--------------------------------------------------------------------------*/
 
-void   		 MGSemiProlong(A_f, e_f, e_c, P, f_sr_array, c_sr_array,
-			       compute_pkg, e_f_comm_pkg)
-Matrix 		*A_f;
-Vector 		*e_f;
-Vector 		*e_c;
-Matrix 		*P;
-SubregionArray  *f_sr_array;
-SubregionArray  *c_sr_array;
-ComputePkg      *compute_pkg;
-CommPkg         *e_f_comm_pkg;
+void   		 MGSemiProlong(
+   Matrix 		*A_f,
+   Vector 		*e_f,
+   Vector 		*e_c,
+   Matrix 		*P,
+   SubregionArray  *f_sr_array,
+   SubregionArray  *c_sr_array,
+   ComputePkg      *compute_pkg,
+   CommPkg         *e_f_comm_pkg)
 {
    SubregionArray *subregion_array;
 
@@ -78,6 +77,8 @@ CommPkg         *e_f_comm_pkg;
 
    CommHandle     *handle = NULL;
 
+   (void) A_f;
+   (void) f_sr_array;
 
    /*--------------------------------------------------------------------
     * Compute e_f in c_sr_array
@@ -212,15 +213,14 @@ CommPkg         *e_f_comm_pkg;
  * NewMGSemiProlongComputePkg
  *--------------------------------------------------------------------------*/
 
-ComputePkg   *NewMGSemiProlongComputePkg(grid, stencil,
-					 sx, sy, sz, c_index, f_index)
-Grid         *grid;
-Stencil      *stencil;
-int           sx;
-int           sy;
-int           sz;
-int           c_index;
-int           f_index;
+ComputePkg   *NewMGSemiProlongComputePkg(
+Grid         *grid,
+Stencil      *stencil,
+int           sx,
+int           sy,
+int           sz,
+int           c_index,
+int           f_index)
 {
    ComputePkg  *compute_pkg;
 

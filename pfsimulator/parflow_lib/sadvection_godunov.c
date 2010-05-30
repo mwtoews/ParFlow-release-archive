@@ -81,30 +81,26 @@ typedef struct
  * SatGodunov
  *--------------------------------------------------------------------------*/
 
-void     SatGodunov(problem_data, phase,
-                    old_saturation, new_saturation,
-                    x_velocity, y_velocity, z_velocity, z_permeability,
-                    solid_mass_factor, viscosity, density, gravity,
-                    time, deltat, order)
-ProblemData *problem_data;
-int          phase;
-Vector      *old_saturation;
-Vector      *new_saturation;
-Vector      *x_velocity;
-Vector      *y_velocity;
-Vector      *z_velocity;
-Vector      *z_permeability;
-Vector      *solid_mass_factor;
-double      *viscosity;
-double      *density;
-double       gravity;
-double       time;
-double       deltat;
-int          order;
+void     SatGodunov(
+ProblemData *problem_data,
+int          phase,
+Vector      *old_saturation,
+Vector      *new_saturation,
+Vector      *x_velocity,
+Vector      *y_velocity,
+Vector      *z_velocity,
+Vector      *z_permeability,
+Vector      *solid_mass_factor,
+double      *viscosity,
+double      *density,
+double       gravity,
+double       time,
+double       deltat,
+int          order)
 {
     PFModule     *this_module   = ThisPFModule;
-    InstanceXtra *instance_xtra = PFModuleInstanceXtra(this_module);
-    PublicXtra   *public_xtra   = PFModulePublicXtra(this_module);
+    InstanceXtra *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
+    PublicXtra   *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
     Problem   *problem         = (instance_xtra -> problem);
     Grid      *grid            = (instance_xtra -> grid);
@@ -759,10 +755,10 @@ int          order;
  * SatGodunovInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *SatGodunovInitInstanceXtra(problem, grid, temp_data)
-Problem   *problem;
-Grid      *grid;
-double    *temp_data;
+PFModule  *SatGodunovInitInstanceXtra(
+   Problem   *problem,
+   Grid      *grid,
+   double    *temp_data)
 {
    PFModule     *this_module  = ThisPFModule;
    InstanceXtra *instance_xtra;
@@ -778,7 +774,7 @@ double    *temp_data;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `problem'
@@ -883,7 +879,7 @@ double    *temp_data;
 void  SatGodunovFreeInstanceXtra()
 {
    PFModule     *this_module   = ThisPFModule;
-   InstanceXtra *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    if ( instance_xtra )
    {
@@ -919,7 +915,7 @@ PFModule  *SatGodunovNewPublicXtra()
 void SatGodunovFreePublicXtra()
 {
    PFModule     *this_module  = ThisPFModule;
-   PublicXtra   *public_xtra  = PFModulePublicXtra(this_module);
+   PublicXtra   *public_xtra  = (PublicXtra *)PFModulePublicXtra(this_module);
 
    if ( public_xtra )
    {
@@ -936,7 +932,7 @@ void SatGodunovFreePublicXtra()
 int  SatGodunovSizeOfTempData()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra   = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra   = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    int  max_nx = (instance_xtra -> max_nx);
    int  max_ny = (instance_xtra -> max_ny);

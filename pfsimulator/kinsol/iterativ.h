@@ -15,15 +15,16 @@
  *                                                                * 
  ******************************************************************/
 
+
+
+#include "llnltyps.h"
+#include "vector.h"
+
 #ifdef __cplusplus     /* wrapper to enable C++ usage */
 extern "C" {
 #endif
 #ifndef _iterativ_h
 #define _iterativ_h
-
-
-#include "llnltyps.h"
-#include "vector.h"
 
 
 /******************************************************************
@@ -44,7 +45,7 @@ extern "C" {
  *                                                                *
  ******************************************************************/ 
 
-enum { NONE, LEFT, RIGHT, BOTH } precond_type;
+enum precond_type { NONE, LEFT, RIGHT, BOTH };
 
 
 /******************************************************************
@@ -61,7 +62,7 @@ enum { NONE, LEFT, RIGHT, BOTH } precond_type;
  *                                                                *
  ******************************************************************/
 
-enum { MODIFIED_GS, CLASSICAL_GS } gs_type;
+enum gs_type { MODIFIED_GS, CLASSICAL_GS } ;
 
 
 /******************************************************************

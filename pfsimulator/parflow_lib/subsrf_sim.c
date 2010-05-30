@@ -99,19 +99,18 @@ typedef struct
  * SubsrfSim
  *--------------------------------------------------------------------------*/
 
-void SubsrfSim (problem_data, perm_x, perm_y, perm_z, num_geounits, 
-		geounits, gr_geounits)
-ProblemData   *problem_data;
-Vector        *perm_x;
-Vector        *perm_y;
-Vector        *perm_z;
-int            num_geounits;
-GeomSolid    **geounits;
-GrGeomSolid  **gr_geounits;
+void SubsrfSim (
+ProblemData   *problem_data,
+Vector        *perm_x,
+Vector        *perm_y,
+Vector        *perm_z,
+int            num_geounits,
+GeomSolid    **geounits,
+GrGeomSolid  **gr_geounits)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    Type0         *dummy0;
    Type1         *dummy1;
@@ -161,6 +160,8 @@ GrGeomSolid  **gr_geounits;
 
    amps_Invoice      result_invoice;
 
+   (void) num_geounits;
+
    BeginTiming(public_xtra -> time_index);
 
    /* Transfer conditioning data from the public_xtra structure to a local
@@ -179,8 +180,9 @@ GrGeomSolid  **gr_geounits;
    for (i = 0; i < num_geo_indexes; i++)
    {
       j = geo_indexes[i];
-      PFModuleInvoke(void, KFieldSimulators[i],
-		     (geounits[j], gr_geounits[j], tmp_perm, cdata));
+      PFModuleInvokeType(KFieldSimulatorInvoke,
+			 KFieldSimulators[i],
+			 (geounits[j], gr_geounits[j], tmp_perm, cdata));
    }
 
    /*------------------------------------------------------------------------
@@ -476,12 +478,12 @@ GrGeomSolid  **gr_geounits;
  * SubsrfSimInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *SubsrfSimInitInstanceXtra(grid,temp_data)
-Grid      *grid;
-double *temp_data;
+PFModule  *SubsrfSimInitInstanceXtra(
+   Grid      *grid,
+   double *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
    InstanceXtra  *instance_xtra;
 
    Type1     *dummy1;
@@ -493,7 +495,7 @@ double *temp_data;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -557,14 +559,16 @@ double *temp_data;
 
       for (i = 0; i < num_geo_indexes; i++)
 	 (instance_xtra -> KFieldSimulators)[i] =
-	    PFModuleNewInstance((public_xtra -> KFieldSimulators)[i],
-				(grid,temp_data));
+	    PFModuleNewInstanceType(KFieldSimulatorInitInstanceXtraInvoke, 
+				    (public_xtra -> KFieldSimulators)[i],
+				    (grid,temp_data));
    }
    else
    {
       for (i = 0; i < num_geo_indexes; i++)
-	 PFModuleReNewInstance((instance_xtra -> KFieldSimulators)[i],
-			       (grid,temp_data));
+	 PFModuleReNewInstanceType(KFieldSimulatorInitInstanceXtraInvoke,
+				   (instance_xtra -> KFieldSimulators)[i],
+				   (grid,temp_data));
    }
 
    PFModuleInstanceXtra(this_module) = instance_xtra;
@@ -579,8 +583,8 @@ double *temp_data;
 void  SubsrfSimFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    Type1 *dummy1;
    int i;
@@ -729,25 +733,25 @@ PFModule   *SubsrfSimNewPublicXtra()
 	 case 0:
 	 {
 	    (public_xtra -> KFieldSimulators)[i] =
-	       PFModuleNewModule(ConstantRF, (geom_name));
+	       PFModuleNewModuleType(KFieldSimulatorNewPublicXtra, ConstantRF, (geom_name));
 	    break;
 	 }
 	 case 1:
 	 {
 	    (public_xtra -> KFieldSimulators)[i] =
-	       PFModuleNewModule(TurningBandsRF, (geom_name));
+	       PFModuleNewModuleType(KFieldSimulatorNewPublicXtra, TurningBandsRF, (geom_name));
 	    break;
 	 }
 	 case 2:
 	 {
 	    (public_xtra -> KFieldSimulators)[i] =
-	       PFModuleNewModule(PGSRF, (geom_name));
+	       PFModuleNewModuleType(KFieldSimulatorNewPublicXtra, PGSRF, (geom_name));
 	    break;
 	 }
 	 case 3:
 	 {
 	    (public_xtra -> KFieldSimulators)[i] =
-	       PFModuleNewModule(InputRF, (geom_name));
+	       PFModuleNewModuleType(KFieldSimulatorNewPublicXtra, InputRF, (geom_name));
 	    break;
 	 }
 	 default: 
@@ -838,7 +842,7 @@ PFModule   *SubsrfSimNewPublicXtra()
 void  SubsrfSimFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0       *dummy0;
    Type1       *dummy1;
@@ -893,8 +897,8 @@ void  SubsrfSimFreePublicXtra()
 int  SubsrfSimSizeOfTempData()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    int  sz = 0;
 

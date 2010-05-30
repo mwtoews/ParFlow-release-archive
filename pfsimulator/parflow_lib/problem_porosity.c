@@ -61,16 +61,16 @@ typedef struct
  * Porosity
  *--------------------------------------------------------------------------*/
 
-void Porosity(problem_data, porosity, num_geounits, geounits, gr_geounits)
-ProblemData   *problem_data;
-Vector        *porosity;
-int            num_geounits;
-GeomSolid    **geounits;
-GrGeomSolid  **gr_geounits;
+void Porosity(
+ProblemData   *problem_data,
+Vector        *porosity,
+int            num_geounits,
+GeomSolid    **geounits,
+GrGeomSolid  **gr_geounits)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    int               num_geo_indexes  = (public_xtra -> num_geo_indexes); 
    int              *geo_indexes      = (public_xtra -> geo_indexes);
@@ -96,6 +96,8 @@ GrGeomSolid  **gr_geounits;
    int               i, j, k, pi, sg, well;
 
    double           *phi;
+   
+   (void)num_geounits;
 
    BeginTiming(public_xtra -> time_index);
 
@@ -108,7 +110,7 @@ GrGeomSolid  **gr_geounits;
    for (i = 0; i < num_geo_indexes; i++)
    {
       j = geo_indexes[i];
-      PFModuleInvoke(void, PorosityFieldSimulators[i], (geounits[j], gr_geounits[j], porosity));
+      PFModuleInvokeType(PorosityFieldInvoke, PorosityFieldSimulators[i], (geounits[j], gr_geounits[j], porosity));
    }
 
    /*------------------------------------------------------------------------
@@ -216,12 +218,12 @@ GrGeomSolid  **gr_geounits;
  * PorosityInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *PorosityInitInstanceXtra(grid,temp_data)
-Grid      *grid;
-double    *temp_data;
+PFModule  *PorosityInitInstanceXtra(
+   Grid      *grid,
+   double    *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
    InstanceXtra  *instance_xtra;
 
    int        num_geo_indexes = (public_xtra -> num_geo_indexes);
@@ -230,7 +232,7 @@ double    *temp_data;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -250,14 +252,14 @@ double    *temp_data;
       for (i = 0; i < num_geo_indexes; i++)
       {
          (instance_xtra -> PorosityFieldSimulators)[i] =
-         PFModuleNewInstance((public_xtra -> PorosityFieldSimulators)[i], (grid, temp_data));
+	    PFModuleNewInstanceType(PorosityFieldInitInstanceXtraInvoke, (public_xtra -> PorosityFieldSimulators)[i], (grid, temp_data));
       }
    }
    else
    {
       for (i = 0; i < num_geo_indexes; i++)
       {
-         PFModuleReNewInstance((instance_xtra -> PorosityFieldSimulators)[i], (grid, temp_data));
+         PFModuleReNewInstanceType(PorosityFieldInitInstanceXtraInvoke, (instance_xtra -> PorosityFieldSimulators)[i], (grid, temp_data));
       }
    }
 
@@ -273,8 +275,8 @@ double    *temp_data;
 void  PorosityFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    int i;
 
@@ -356,8 +358,8 @@ PFModule   *PorosityNewPublicXtra()
       {
 	 case 0:
 	 {
-	    (public_xtra -> PorosityFieldSimulators)[i] = PFModuleNewModule(
-	       ConstantPorosity, (geom_name));
+	    (public_xtra -> PorosityFieldSimulators)[i] = PFModuleNewModuleType(PorosityFieldNewPublicXtraInvoke,
+										ConstantPorosity, (geom_name));
 	    break;
 	 }
 	 default:
@@ -385,7 +387,7 @@ PFModule   *PorosityNewPublicXtra()
 void  PorosityFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    int i;
 
@@ -412,8 +414,8 @@ void  PorosityFreePublicXtra()
 int  PorositySizeOfTempData()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   PublicXtra    *instance_xtra = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   PublicXtra    *instance_xtra = (PublicXtra *)PFModulePublicXtra(this_module);
 
    int  sz = 0;
 

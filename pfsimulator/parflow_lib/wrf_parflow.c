@@ -91,7 +91,7 @@ void wrfparflowinit_(char *input_file) {
    
    GlobalsMaxRefLevel = 0;
    
-   amps_ThreadLocal(Solver_module) = PFModuleNewModule(SolverRichards, ("Solver"));
+   amps_ThreadLocal(Solver_module) = PFModuleNewModuleType(SolverImpesNewPublicXtraInvoke, SolverRichards, ("Solver"));
    
    amps_ThreadLocal(solver) = PFModuleNewInstance(amps_ThreadLocal(Solver_module), ());
    
@@ -147,15 +147,34 @@ void wrfparflowadvance_(double *current_time,
    handle = InitVectorUpdate(evap_trans, VectorUpdateAll);
    FinalizeVectorUpdate(handle); 
 
+   // SGS this is somewhat inefficient as we are allocating
+   // a pf module for each timestep.
+   double initial_step = *dt;
+   double growth_factor = 2.0;
+   double max_step = *dt;
+   // SGS what should this be set to?
+   double min_step = *dt * 1e-8;
+
+   PFModule *time_step_control = PFModuleNewModule(SelectTimeStep, (
+			  initial_step,
+			  growth_factor,
+			  max_step,
+			  min_step));
+
+   PFModuleNewInstance(time_step_control, ());
+
    AdvanceRichards(amps_ThreadLocal(solver),
 		   *current_time, 
 		   stop_time, 
-		   *dt, 
-		   compute_time_step,
+		   time_step_control,
 		   amps_ThreadLocal(evap_trans),
 		   &pressure_out, 
 		   &porosity_out,
 		   &saturation_out);
+
+   PFModuleFreeModuleInstance(time_step_control);
+   PFModuleFreeModule(time_step_control);
+
 
    /* TODO: SGS 
       Are these needed here?  Decided to put them in just be safe but
@@ -205,6 +224,8 @@ void WRF2PF(
 
    Grid       *grid     = VectorGrid(pf_vector);
    int sg;
+   
+   (void)ghost_size_j_upper;
 
    ForSubgridI(sg, GridSubgrids(grid))
    {
@@ -234,7 +255,7 @@ void WRF2PF(
 
 	    // SGS What to do if near bottom such that
 	    // there are not wrf_depth values?
-	    int iz = top_data[top_index] - (wrf_depth - 1);
+	    int iz = (int)top_data[top_index] - (wrf_depth - 1);
 	    for (k = iz; k < iz + wrf_depth; k++)		
 	    {
 	       int pf_index = SubvectorEltIndex(subvector, i, j, k);
@@ -267,6 +288,8 @@ void PF2WRF(
    Grid       *grid     = VectorGrid(pf_vector);
    int sg;
 
+   (void) ghost_size_j_upper;
+
    ForSubgridI(sg, GridSubgrids(grid))
    {
       Subgrid *subgrid = GridSubgrid(grid, sg);
@@ -295,7 +318,7 @@ void PF2WRF(
 
 	    // SGS What to do if near bottom such that
 	    // there are not wrf_depth values?
-	    int iz = top_data[top_index] - (wrf_depth - 1);
+	    int iz = (int)top_data[top_index] - (wrf_depth - 1);
 
 	    for (k = iz; k < iz + wrf_depth; k++)		
 	    {

@@ -60,13 +60,13 @@ typedef struct
  * Retardation
  *--------------------------------------------------------------------------*/
 
-void         Retardation(solidmassfactor, contaminant, problem_data)
-Vector      *solidmassfactor;
-int          contaminant;
-ProblemData *problem_data;
+void         Retardation(
+   Vector      *solidmassfactor,
+   int          contaminant,
+   ProblemData *problem_data)
 {
    PFModule   *this_module   = ThisPFModule;
-   PublicXtra *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    GrGeomSolid **gr_solids = ProblemDataGrSolids(problem_data);
 
@@ -153,8 +153,8 @@ ProblemData *problem_data;
  * RetardationInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *RetardationInitInstanceXtra(temp_data)
-double *temp_data;
+PFModule  *RetardationInitInstanceXtra(
+   double *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
@@ -163,7 +163,7 @@ double *temp_data;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `temp_data'
@@ -186,7 +186,7 @@ double *temp_data;
 void  RetardationFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if (instance_xtra)
@@ -200,8 +200,8 @@ void  RetardationFreeInstanceXtra()
  * RetardationNewPublicXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *RetardationNewPublicXtra(num_contaminants)
-int        num_contaminants;
+PFModule  *RetardationNewPublicXtra(
+   int        num_contaminants)
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra;
@@ -312,7 +312,7 @@ int        num_contaminants;
 void  RetardationFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0       *dummy0;
 

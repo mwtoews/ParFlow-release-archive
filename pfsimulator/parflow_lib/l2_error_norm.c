@@ -50,14 +50,14 @@ typedef struct
  * L2ErrorNorm
  *--------------------------------------------------------------------------*/
 
-void         L2ErrorNorm(time, pressure, problem_data, l2_error_norm)
-double       time;
-Vector      *pressure;
-ProblemData *problem_data;
-double      *l2_error_norm;
+void         L2ErrorNorm(
+double       time,
+Vector      *pressure,
+ProblemData *problem_data,
+double      *l2_error_norm)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra    *)PFModulePublicXtra(this_module);
 
    Grid             *grid = VectorGrid(pressure);
 
@@ -263,7 +263,7 @@ PFModule  *L2ErrorNormInitInstanceXtra()
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 #endif
    instance_xtra = NULL;
 
@@ -279,7 +279,7 @@ PFModule  *L2ErrorNormInitInstanceXtra()
 void  L2ErrorNormFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if (instance_xtra)
@@ -383,7 +383,7 @@ PFModule  *L2ErrorNormNewPublicXtra()
 void  L2ErrorNormFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra  *)PFModulePublicXtra(this_module);
 
    Type1       *dummy1;
 

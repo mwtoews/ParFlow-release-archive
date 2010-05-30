@@ -28,14 +28,7 @@
 
 #include "amps.h"
 
-void amps_vector_in(comm, type, data, buf_ptr, dim, len, stride)
-amps_Comm comm;
-int type;
-int dim;
-char **buf_ptr;
-char **data;
-int *len;
-int *stride;
+void amps_vector_in (amps_Comm comm , int type , char **data , char **buf_ptr , int dim , int *len , int *stride )
 {
    int i;
    
@@ -117,16 +110,16 @@ int *stride;
    }
 }
 
-int amps_vector_align(comm, type, data, buf_ptr, dim, len, stride)
-amps_Comm comm;
-int type;
-int dim;
-char **buf_ptr;
-char **data;
-int *len;
-int *stride;
+int amps_vector_align (amps_Comm comm , int type , char **data , char **buf_ptr , int dim , int *len , int *stride )
 {
    int align = 0;
+
+   (void) comm;
+   (void) data;
+   (void) dim;
+   (void) len;
+   (void) stride;
+
    switch(type)
    {
    case AMPS_INVOICE_CHAR_CTYPE:
@@ -157,17 +150,15 @@ int *stride;
    return align;
 }
 
-int amps_vector_sizeof_buffer(comm, type, data, buf_ptr, dim, len, stride)
-amps_Comm comm;
-int type;
-int dim;
-char **buf_ptr;
-char **data;
-int *len;
-int *stride;
+int amps_vector_sizeof_buffer (amps_Comm comm , int type , char **data , char **buf_ptr , int dim , int *len , int *stride )
 {
    int size = 0;
    int i;
+
+   (void) comm;
+   (void) data;
+   (void) buf_ptr;
+   (void) stride;
 
    switch(type)
    {
@@ -199,18 +190,15 @@ int *stride;
    return size;
 }
 
-int amps_vector_sizeof_local(comm, type, data, buf_ptr, dim, len, stride)
-amps_Comm comm;
-int type;
-int dim;
-char **buf_ptr;
-char **data;
-int *len;
-int *stride;
+int amps_vector_sizeof_local (amps_Comm comm , int type , char **data , char **buf_ptr , int dim , int *len , int *stride )
 {
    int size = 0;
    int el_size = 0;
    int i;
+
+   (void) comm;
+   (void) data;
+   (void) buf_ptr;
 
    switch(type)
    {

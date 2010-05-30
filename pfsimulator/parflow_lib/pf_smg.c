@@ -66,16 +66,16 @@ typedef struct
  * SMG
  *--------------------------------------------------------------------------*/
 
-void         SMG(soln, rhs, tol, zero)
-Vector      *soln;
-Vector      *rhs;
-double       tol;
-int          zero;
+void         SMG(
+Vector      *soln,
+Vector      *rhs,
+double       tol,
+int          zero)
 {
 #ifdef HAVE_HYPRE
    PFModule           *this_module    = ThisPFModule;
-   InstanceXtra       *instance_xtra  = PFModuleInstanceXtra(this_module);
-   PublicXtra         *public_xtra    = PFModulePublicXtra(this_module);
+   InstanceXtra       *instance_xtra  = (InstanceXtra *)PFModuleInstanceXtra(this_module);
+   PublicXtra         *public_xtra    = (PublicXtra *)PFModulePublicXtra(this_module);
 
    HYPRE_StructMatrix  hypre_mat      = instance_xtra -> hypre_mat;
    HYPRE_StructVector  hypre_b        = instance_xtra -> hypre_b;
@@ -104,6 +104,8 @@ int          zero;
 
    int                 num_iterations;
    double              rel_norm;
+
+   (void) zero;
 
    /* Copy rhs to hypre_b vector. */
    BeginTiming(public_xtra->time_index_copy_hypre);
@@ -223,17 +225,16 @@ int          zero;
  * SMGInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *SMGInitInstanceXtra(problem, grid, problem_data,  
-			       pf_matrix, temp_data)
-Problem      *problem;
-Grid         *grid;
-ProblemData  *problem_data;
-Matrix       *pf_matrix;
-double       *temp_data;
+PFModule  *SMGInitInstanceXtra(
+Problem      *problem,
+Grid         *grid,
+ProblemData  *problem_data,
+Matrix       *pf_matrix,
+double       *temp_data)
 {
 #ifdef HAVE_HYPRE
    PFModule      *this_module        = ThisPFModule;
-   PublicXtra    *public_xtra        = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra        = (PublicXtra *)PFModulePublicXtra(this_module);
    InstanceXtra  *instance_xtra;
 
    int                 max_iter      = public_xtra -> max_iter;
@@ -266,10 +267,14 @@ double       *temp_data;
    int                 ilo[3];
    int                 ihi[3];
 
+   (void) problem;
+   (void) problem_data;
+   (void) temp_data;
+
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    if ( grid != NULL )
    {
@@ -486,7 +491,7 @@ void  SMGFreeInstanceXtra()
 {
 #ifdef HAVE_HYPRE
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    if (instance_xtra)
    {
@@ -550,7 +555,7 @@ void  SMGFreePublicXtra()
 {
 #ifdef HAVE_HYPRE
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    if ( public_xtra )
    {

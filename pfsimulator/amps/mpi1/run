@@ -27,6 +27,11 @@
 #  USA
 #**********************************************************************EHEADER
 
+if [ -f ~/.parflowrc ] 
+then
+    . ~/.parflowrc
+fi
+
 
 #=============================================================================
 #
@@ -118,6 +123,13 @@ case `uname -a` in
     srun -n $2 $PARFLOW_RUN_OPTS $PARFLOW_DIR/bin/$PROGRAM $1 > $1.out.txt
     exit 0
     ;;
+    *Cygwin*)
+    #
+    # For cygwin
+    #
+    mpiexec -n $2 ${PARFLOW_DIR}/bin/$PROGRAM $1 2>&1 > $1.out.txt < /dev/null
+    exit 0
+    ;;
 esac
 
 #
@@ -149,9 +161,8 @@ then
     mpirun -np $2  $PARFLOW_DIR/bin/$PROGRAM $1 2>&1 > $1.out.txt
     exit 0
 else
-    echo "Unrecognized MPI implementation"
-    exit 1
-
+    mpiexec -n $2 ${PARFLOW_DIR}/bin/$PROGRAM $1 2>&1 > $1.out.txt < /dev/null
+    exit 0
 fi
 
 

@@ -41,13 +41,13 @@
  * PField
  *--------------------------------------------------------------------------*/
 
-void         PField(grid, geounit, gr_geounit, field, cdata, stats)
-Grid         *grid;
-GeomSolid    *geounit;
-GrGeomSolid  *gr_geounit;
-Vector       *field;
-RFCondData   *cdata;
-Statistics   *stats;
+void         PField(
+Grid         *grid,
+GeomSolid    *geounit,
+GrGeomSolid  *gr_geounit,
+Vector       *field,
+RFCondData   *cdata,
+Statistics   *stats)
 {
 
   /*-----------------*
@@ -110,6 +110,8 @@ Statistics   *stats;
 
    /* Conditioning data variables */
    int       *ci, *cj, *ck;	/* Indices for conditioning data points */
+
+   (void) geounit;
    
    /*-----------------------------------------------------------------------
     * Start p-field algorithm

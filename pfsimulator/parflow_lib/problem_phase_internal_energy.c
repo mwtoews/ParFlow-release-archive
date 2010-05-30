@@ -81,14 +81,13 @@ typedef struct
  * PhaseDensity
  *-------------------------------------------------------------------------*/
 
-void    InternalEnergyDensity(phase, pressure, temperature, energy, density, 
-		              fcn)
-int     phase;           /* Phase */
-Vector *pressure;  /* Vector of phase pressures at each block */
-Vector *temperature;  /* Vector of phase temperature at each block */
-Vector *energy;       /* Vector of return densities at each block */
-Vector *density;       /* Double array return density */
-int     fcn;             /* Flag determining what to calculate 
+void    InternalEnergyDensity(
+int     phase,           /* Phase */
+Vector *pressure,  /* Vector of phase pressures at each block */
+Vector *temperature,  /* Vector of phase temperature at each block */
+Vector *energy,       /* Vector of return densities at each block */
+Vector *density,       /* Double array return density */
+int     fcn)             /* Flag determining what to calculate 
                           * fcn = CALCFCN => calculate the function value
 			  * fcn = CALCDER => calculate the function 
 			  *                  derivative */
@@ -101,7 +100,7 @@ int     fcn;             /* Flag determining what to calculate
  */
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    TypeDensity0         *dummy_density0;
    TypeEnergy0         *dummy_energy0;
@@ -171,6 +170,8 @@ int     fcn;             /* Flag determining what to calculate
    double vmkr,v,yd,snum;
    double prt1,prt2,prt3,prt4,prt5;
    double bb1,bb2,ee1,ee3,entr,h;
+
+   (void)pressure;
 
    switch((public_xtra -> type_density[phase]))
    {
@@ -356,7 +357,7 @@ PFModule  *InternalEnergyDensityInitInstanceXtra()
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 #endif
    instance_xtra = NULL;
 
@@ -372,7 +373,7 @@ PFModule  *InternalEnergyDensityInitInstanceXtra()
 void  InternalEnergyDensityFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    if (instance_xtra)
    {
@@ -386,8 +387,8 @@ void  InternalEnergyDensityFreeInstanceXtra()
  * InternalEnergyDensityNewPublicXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *InternalEnergyDensityNewPublicXtra(num_phases)
-int        num_phases;
+PFModule  *InternalEnergyDensityNewPublicXtra(
+   int        num_phases)
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra;
@@ -504,7 +505,7 @@ int        num_phases;
 void  InternalEnergyDensityFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    TypeEnergy0        *dummy_energy0;
    TypeDensity0       *dummy_density0;

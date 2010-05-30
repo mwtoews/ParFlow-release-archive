@@ -74,22 +74,20 @@ typedef struct
  *    This routine returns a Vector of thermalconductivities based on saturations.
  *--------------------------------------------------------------------------*/
 
-void	 ThermalConductivity(phase_thermalconductivity, phase_pressure, phase_saturation, 
-		    gravity, problem_data, fcn)
-
-Vector      *phase_thermalconductivity;  /* Vector of return thermal conductivities */
-Vector      *phase_pressure;    /* Vector of pressures */
-Vector      *phase_saturation;     /* Vector of saturations*/
-double       gravity;           /* Magnitude of gravity in neg. z direction */
-ProblemData *problem_data;      /* Contaicwets geometry info. for the problem */
-int          fcn;               /* Flag determining what to calculate 
+void	 ThermalConductivity(
+Vector      *phase_thermalconductivity,  /* Vector of return thermal conductivities */
+Vector      *phase_pressure,    /* Vector of pressures */
+Vector      *phase_saturation,     /* Vector of saturations*/
+double       gravity,           /* Magnitude of gravity in neg. z direction */
+ProblemData *problem_data,      /* Contaicwets geometry info. for the problem */
+int          fcn)               /* Flag determining what to calculate 
                                  * fcn = CALCFCN => calculate the function
 				 *                  value
                                  * fcn = CALCDER => calculate the function 
                                  *                  derivative */
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0         *dummy0;
    Type1         *dummy1;
@@ -121,6 +119,8 @@ int          fcn;               /* Flag determining what to calculate
    int            cwet_index, cdry_index;
 
    int            *region_indices, num_regions, ir;
+
+   (void) gravity;
 
    /* Initialize thermal conductivity to 0.0 */
    InitVectorAll(phase_thermalconductivity,0.0);
@@ -334,11 +334,11 @@ int          fcn;               /* Flag determining what to calculate
  * ThermalConductivityInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *ThermalConductivityInitInstanceXtra(grid)
-Grid      *grid;
+PFModule  *ThermalConductivityInitInstanceXtra(
+   Grid      *grid)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
    InstanceXtra  *instance_xtra;
 
    Type1         *dummy1;
@@ -346,7 +346,7 @@ Grid      *grid;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -415,8 +415,8 @@ Grid      *grid;
 void  ThermalConductivityFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    Type1   *dummy1;
 
@@ -568,7 +568,7 @@ PFModule   *ThermalConductivityNewPublicXtra()
 void  ThermalConductivityFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0       *dummy0;
    Type1       *dummy1;
@@ -622,7 +622,7 @@ void  ThermalConductivityFreePublicXtra()
 int  ThermalConductivitySizeOfTempData()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type1         *dummy1;
 

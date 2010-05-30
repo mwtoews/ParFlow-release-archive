@@ -39,13 +39,13 @@
  * compute_phase_maximum
  *-------------------------------------------------------------------------*/
 
-double  ComputePhaseMaximum(phase_u_max,dx,phase_v_max,dy,phase_w_max,dz)
-double  phase_u_max;
-double  dx;
-double  phase_v_max;
-double  dy;
-double  phase_w_max;
-double  dz;
+double  ComputePhaseMaximum(
+   double  phase_u_max,
+   double  dx,
+   double  phase_v_max,
+   double  dy,
+   double  phase_w_max,
+   double  dz)
 {
    double  maximum, tmp;
 
@@ -69,21 +69,18 @@ double  dz;
  * compute_total_maximum
  *-------------------------------------------------------------------------*/
 
-double  ComputeTotalMaximum(problem,eval_struct,s_lower,s_upper,
-                            total_u_max,dx,
-                            total_v_max,dy,
-                            total_w_max,beta_max,dz)
-Problem    *problem;
-EvalStruct *eval_struct;
-double      s_lower;
-double      s_upper;
-double      total_u_max;
-double      dx;
-double      total_v_max;
-double      dy;
-double      total_w_max;
-double      beta_max;
-double      dz;
+double  ComputeTotalMaximum(
+   Problem    *problem,
+   EvalStruct *eval_struct,
+   double      s_lower,
+   double      s_upper,
+   double      total_u_max,
+   double      dx,
+   double      total_v_max,
+   double      dy,
+   double      total_w_max,
+   double      beta_max,
+   double      dz)
 {
 
    PFModule     *phase_density       = ProblemPhaseDensity(problem);
@@ -98,8 +95,13 @@ double      dz;
 
    /* CSW  Hard-coded in an assumption here for constant density. 
     *      Use dtmp as dummy argument here. */
-   PFModuleInvoke(void, phase_density, (0, NULL, NULL, &dtmp, &den0, CALCFCN));
-   PFModuleInvoke(void, phase_density, (1, NULL, NULL, &dtmp, &den1, CALCFCN));
+
+// Solution using a typedef: Define a pointer to a function which is taking
+// two floats and returns a float
+   typedef float(*pt2Func)(float, float);
+
+   PFModuleInvokeType(PhaseDensityInvoke, phase_density, (0, NULL, NULL, &dtmp, &den0, CALCFCN));
+   PFModuleInvokeType(PhaseDensityInvoke, phase_density, (1, NULL, NULL, &dtmp, &den1, CALCFCN));
 
    g = -ProblemGravity(problem);
 

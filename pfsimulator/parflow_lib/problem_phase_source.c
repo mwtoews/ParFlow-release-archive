@@ -48,15 +48,15 @@ typedef struct
  * PhaseSource
  *--------------------------------------------------------------------------*/
 
-void         PhaseSource(phase_source, phase, problem, problem_data, time)
-Vector      *phase_source;
-int          phase;
-Problem     *problem;
-ProblemData *problem_data;
-double       time;
+void         PhaseSource(
+Vector      *phase_source,
+int          phase,
+Problem     *problem,
+ProblemData *problem_data,
+double       time)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    WellData         *well_data = ProblemDataWellData(problem_data);
    WellDataPhysical *well_data_physical;
@@ -92,7 +92,7 @@ double       time;
    /* Locals associated with wells */
    int               well;
    int               cycle_number, interval_number;
-   double            volume, flux, well_value, weight;
+   double            volume, flux, well_value, weight = -FLT_MAX;
    double            area_x, area_y, area_z, area_sum;
    double            avg_x, avg_y, avg_z;
    double            dx, dy, dz;
@@ -358,7 +358,7 @@ double       time;
 	       area_x = dy*dz;
 	       area_y = dx*dz;
 	       area_z = dx*dy;
-	       area_sum = area_x * area_y + area_z;
+	       area_sum = area_x + area_y + area_z;
 
                px = SubvectorElt(px_sub, ix, iy, iz);
                py = SubvectorElt(py_sub, ix, iy, iz);
@@ -416,7 +416,7 @@ PFModule  *PhaseSourceInitInstanceXtra()
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 #endif
    instance_xtra = NULL;
 
@@ -432,7 +432,7 @@ PFModule  *PhaseSourceInitInstanceXtra()
 void  PhaseSourceFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if (instance_xtra)
@@ -445,8 +445,8 @@ void  PhaseSourceFreeInstanceXtra()
  * PhaseSourceNewPublicXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *PhaseSourceNewPublicXtra(num_phases)
-int        num_phases;
+PFModule  *PhaseSourceNewPublicXtra(
+   int        num_phases)
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra;
@@ -567,7 +567,7 @@ int        num_phases;
 void  PhaseSourceFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0       *dummy0;
    Type1       *dummy1;

@@ -54,6 +54,7 @@ typedef struct
    IndicatorData  *indicator_data;
 
    int             time_index;
+   int             pfsol_time_index;
 
    /* Geometry input names are for each "type" of geometry
       the user is inputing */
@@ -74,12 +75,12 @@ typedef struct
  * Geometries
  *--------------------------------------------------------------------------*/
 
-void           Geometries(problem_data)
-ProblemData   *problem_data;
+void           Geometries(
+   ProblemData   *problem_data)
 {
    PFModule           *this_module   = ThisPFModule;
-   PublicXtra         *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra       *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra         *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra       *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 	            
    GeomSolid         **solids              = (public_xtra -> solids);
    int                 num_solids          = (public_xtra -> num_solids);
@@ -174,8 +175,8 @@ ProblemData   *problem_data;
  * GeometriesInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *GeometriesInitInstanceXtra(grid)
-Grid      *grid;
+PFModule  *GeometriesInitInstanceXtra(
+   Grid      *grid)
 {
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
@@ -184,7 +185,7 @@ Grid      *grid;
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `grid'
@@ -208,7 +209,7 @@ Grid      *grid;
 void  GeometriesFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if(instance_xtra)
@@ -358,6 +359,7 @@ PFModule   *GeometriesNewPublicXtra()
 	 
 	 case 1: /* `.pfsol' file */
 	 {
+	    BeginTiming(PFSOLReadTimingIndex);
 	    num_new_solids = GeomReadSolids(&new_solids, 
 					    NA_IndexToName(geom_input_na,i),
 					    GeomTSolidType);
@@ -378,6 +380,8 @@ PFModule   *GeometriesNewPublicXtra()
 		    NA_IndexToName(GlobalsGeomNames, num_solids));
 	    patch_names = GetString(key);
 	    new_solids[0] -> patches = NA_NewNameArray(patch_names);
+
+	    EndTiming(PFSOLReadTimingIndex);
 	    
 	    break;
 	 }
@@ -474,7 +478,7 @@ PFModule   *GeometriesNewPublicXtra()
 void  GeometriesFreePublicXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    IndicatorData *current_indicator_data, *tmp_indicator_data;
 

@@ -57,6 +57,7 @@ void  NewTiming()
    RegisterTiming("PFSB I/O");
    RegisterTiming("PFB I/O");
    RegisterTiming("CLM");
+   RegisterTiming("PFSOL Read");
 #ifdef VECTOR_UPDATE_TIMING
    RegisterTiming("VectorUpdate");
 #endif
@@ -68,8 +69,8 @@ void  NewTiming()
  * RegisterTiming
  *--------------------------------------------------------------------------*/
 
-int  RegisterTiming(name)
-char  *name;
+int  RegisterTiming(
+   char  *name)
 {
    amps_Clock_t     *old_time     = (timing -> time);
    amps_CPUClock_t  *old_cpu_time = (timing -> cpu_time);

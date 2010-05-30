@@ -65,15 +65,15 @@ typedef void InstanceXtra;
  *   Add interior boundary conditions.
  *--------------------------------------------------------------------------*/
 
-void BCInternal(problem, problem_data, A, f, time)
-Problem     *problem;
-ProblemData *problem_data;
-Matrix      *A;
-Vector      *f;
-double       time;
+void BCInternal(
+Problem     *problem,
+ProblemData *problem_data,
+Matrix      *A,
+Vector      *f,
+double       time)
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    PFModule      *phase_density = ProblemPhaseDensity(problem);
 
@@ -123,7 +123,7 @@ double       time;
    /***** Some constants for the routine *****/
 
    /* Hard-coded assumption for constant density. */
-   PFModuleInvoke(void, phase_density, (0, NULL, NULL, &ptmp, &dtmp, CALCFCN));
+   PFModuleInvokeType(PhaseDensityInvoke, phase_density, (0, NULL, NULL, &ptmp, &dtmp, CALCFCN));
    dtmp = ProblemGravity(problem) * dtmp;
 
    /*--------------------------------------------------------------------
@@ -210,7 +210,11 @@ double       time;
             BoxLoopI0(i, j, k,
                       ix, iy, iz, nx, ny, nz,
             {
-               phead = internal_bc_conditions[ibc_sg] -  dtmp * (Z + k*dz);
+          /* @RMM - Fixed bug in internal BC's (down below, only x coord was assigned, not y and z) and
+           changed notion of BC to be pressure head, not head potential to make more consistent with
+           other BC ideas and PF -- to change back, uncomment the "-dtmp*..." portion below */
+                phead = internal_bc_conditions[ibc_sg];  //-  dtmp * (Z + k*dz);
+                //printf("i, j, k, phead: %d %d %d %f \n",i,j,k,phead);
 
                /* set column elements */
                for (index = 1; index < 7; index++)
@@ -246,6 +250,8 @@ double       time;
                      SubmatrixElt(A_sub, index, i, j, k)[0] = 0.0;
                   }
                   SubvectorElt(f_sub, i, j, k)[0] = phead;
+                   //printf("i, j, k, phead: %d %d %d %f \n",i,j,k,phead);
+
                }
             });
          }
@@ -356,7 +362,7 @@ PFModule  *BCInternalInitInstanceXtra()
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 #endif
    instance_xtra = NULL;
 
@@ -372,7 +378,7 @@ PFModule  *BCInternalInitInstanceXtra()
 void   BCInternalFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if (instance_xtra)
@@ -403,11 +409,13 @@ PFModule  *BCInternalNewPublicXtra()
    public_xtra = ctalloc(PublicXtra, 1);
 
    internal_bc_names = GetStringDefault("InternalBC.Names", "");
+    printf("internal bc \n");
    public_xtra -> internal_bc_names = NA_NewNameArray(internal_bc_names);
 
    (public_xtra -> num_conditions) = num_conditions = 
       NA_Sizeof(public_xtra -> internal_bc_names);
-
+   printf("num conditions %d \n",num_conditions);
+    printf(internal_bc_names);
    if ( num_conditions > 0 )
    {
       (public_xtra -> type)      = ctalloc(int,    num_conditions);
@@ -434,11 +442,11 @@ PFModule  *BCInternalNewPublicXtra()
 	       
 	       sprintf(key, "InternalBC.%s.Y", 
 		       NA_IndexToName(public_xtra -> internal_bc_names, i));
-	       dummy0 -> xlocation = GetDouble(key);
+	       dummy0 -> ylocation = GetDouble(key);
 	       
 	       sprintf(key, "InternalBC.%s.Z", 
 		       NA_IndexToName(public_xtra -> internal_bc_names, i));
-	       dummy0 -> xlocation = GetDouble(key);
+	       dummy0 -> zlocation = GetDouble(key);
 	       
 	       sprintf(key, "InternalBC.%s.Value", 
 		       NA_IndexToName(public_xtra -> internal_bc_names, i));
@@ -463,7 +471,7 @@ PFModule  *BCInternalNewPublicXtra()
 void  BCInternalFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0         *dummy0;
 

@@ -79,13 +79,13 @@ typedef struct
  * PhaseViscosity
  *-------------------------------------------------------------------------*/
 
-void    PhaseViscosity(phase, pressure, temperature, viscosity, fcn)
+void    PhaseViscosity(
 
-int     phase;           /* Phase */
-Vector *pressure;  /* Vector of phase pressures at each block */
-Vector *temperature;  /* Vector of phase temperature at each block */
-Vector *viscosity;       /* Vector of return densities at each block */
-int     fcn;             /* Flag determining what to calculate 
+int     phase,           /* Phase */
+Vector *pressure,  /* Vector of phase pressures at each block */
+Vector *temperature,  /* Vector of phase temperature at each block */
+Vector *viscosity,       /* Vector of return densities at each block */
+int     fcn)             /* Flag determining what to calculate 
                           * fcn = CALCFCN => calculate the function value
 			  * fcn = CALCDER => calculate the function 
 			  *                  derivative */
@@ -98,7 +98,7 @@ int     fcn;             /* Flag determining what to calculate
  */
 {
    PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0         *dummy0;
 
@@ -261,7 +261,7 @@ PFModule  *PhaseViscosityInitInstanceXtra()
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 #endif
    instance_xtra = NULL;
 
@@ -277,7 +277,7 @@ PFModule  *PhaseViscosityInitInstanceXtra()
 void  PhaseViscosityFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    if (instance_xtra)
    {
@@ -291,8 +291,8 @@ void  PhaseViscosityFreeInstanceXtra()
  * PhaseViscosityNewPublicXtra
  *--------------------------------------------------------------------------*/
 
-PFModule  *PhaseViscosityNewPublicXtra(num_phases)
-int        num_phases;
+PFModule  *PhaseViscosityNewPublicXtra(
+   int        num_phases)
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra;
@@ -368,7 +368,7 @@ int        num_phases;
 void  PhaseViscosityFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
    Type0        *dummy0;
 

@@ -58,15 +58,15 @@ typedef struct
  * RedBlackGSPoint:
  *--------------------------------------------------------------------------*/
 
-void     RedBlackGSPoint(x, b, tol, zero)
-Vector 	*x;
-Vector 	*b;
-double 	 tol;
-int    	 zero;
+void     RedBlackGSPoint(
+Vector 	*x,
+Vector 	*b,
+double 	 tol,
+int    	 zero)
 {
    PFModule       *this_module   = ThisPFModule;
-   PublicXtra     *public_xtra   = PFModulePublicXtra(this_module);
-   InstanceXtra   *instance_xtra = PFModuleInstanceXtra(this_module);
+   PublicXtra     *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra   *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    int             max_iter  = (public_xtra -> max_iter);
    int             symmetric = (public_xtra -> symmetric);
@@ -108,6 +108,7 @@ int    	 zero;
 
    int             vector_update_mode;
 
+   (void)tol;
 
    /*-----------------------------------------------------------------------
     * Begin timing
@@ -369,22 +370,25 @@ int    	 zero;
  * RedBlackGSPointInitInstanceXtra
  *--------------------------------------------------------------------------*/
 
-PFModule     *RedBlackGSPointInitInstanceXtra(problem, grid, problem_data, A,
-					      temp_data)
-Problem      *problem;
-Grid         *grid;
-ProblemData  *problem_data;
-Matrix       *A;
-double       *temp_data;
+PFModule     *RedBlackGSPointInitInstanceXtra(
+Problem      *problem,
+Grid         *grid,
+ProblemData  *problem_data,
+Matrix       *A,
+double       *temp_data)
 {
    PFModule      *this_module   = ThisPFModule;
    InstanceXtra  *instance_xtra;
 
+   (void)problem;
+   (void)grid;
+   (void)problem_data;
+   (void)temp_data;
 
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
-      instance_xtra = PFModuleInstanceXtra(this_module);
+      instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
    /*-----------------------------------------------------------------------
     * Initialize data associated with argument `A'
@@ -405,7 +409,7 @@ double       *temp_data;
 void   RedBlackGSPointFreeInstanceXtra()
 {
    PFModule      *this_module   = ThisPFModule;
-   InstanceXtra  *instance_xtra = PFModuleInstanceXtra(this_module);
+   InstanceXtra  *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
 
    if(instance_xtra)
@@ -479,7 +483,7 @@ PFModule   *RedBlackGSPointNewPublicXtra(char *name)
 void   RedBlackGSPointFreePublicXtra()
 {
    PFModule    *this_module   = ThisPFModule;
-   PublicXtra  *public_xtra   = PFModulePublicXtra(this_module);
+   PublicXtra  *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
 
    if(public_xtra)
