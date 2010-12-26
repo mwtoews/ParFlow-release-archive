@@ -117,6 +117,7 @@ int SaveSDSCommand P((ClientData clientData , Tcl_Interp *interp , int argc , ch
 int GetListCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int GetEltCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int GetGridCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int SetGridCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int GridTypeCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int CVelCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int VVelCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
@@ -143,6 +144,12 @@ int SaveDiffCommand P((ClientData clientData , Tcl_Interp *interp , int argc , c
 int DiffEltCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int DeleteCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int ComputeTopCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int ComputeBottomCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int ComputeDomainCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int PrintDomainCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int Extract2DDomainCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int BuildDomainCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int PFDistOnDomainCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int ExtractTopCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int SurfaceStorageCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
 int SubsurfaceStorageCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
@@ -160,6 +167,20 @@ void CellSumConst(Databox *X, double val, Databox *mask, Databox *sum);
 void CellDiffConst(Databox *X, double val, Databox *mask, Databox *sum);
 void CellMultConst(Databox *X, double val, Databox *mask, Databox *sum);
 void CellDivConst(Databox *X, double val, Databox *mask, Databox *sum);
+
+int SlopeXUpwindCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int SlopeYUpwindCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int UpstreamAreaCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int FillFlatsCommand    P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int PitFillCommand   P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int MovingAvgCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int SlopeD8Command   P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int SegmentD8Command P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int ChildD8Command   P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int FlintsLawCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int FlintsLawFitCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+int FlintsLawByBasinCommand P((ClientData clientData , Tcl_Interp *interp , int argc , char *argv []));
+
 #undef P
 
 #endif

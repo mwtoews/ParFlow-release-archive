@@ -42,7 +42,8 @@ typedef struct
 
 typedef struct
 {
-   Grid   *grid;
+   Grid   *grid3d;
+   Grid   *grid2d;
 } InstanceXtra;
 
 typedef struct
@@ -79,8 +80,9 @@ void         YSlope(
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
-   Grid             *grid = VectorGrid(dummy);
+   Grid             *grid3d = instance_xtra -> grid3d;
 
    GrGeomSolid      *gr_solid, *gr_domain;
 
@@ -88,9 +90,9 @@ void         YSlope(
    Type1            *dummy1;
    Type2            *dummy2;
 
-   SubgridArray     *subgrids = GridSubgrids(grid);
+   SubgridArray     *subgrids = GridSubgrids(grid3d);
 
-   CommHandle       *handle;
+   VectorUpdateCommHandle       *handle;
 
    Subgrid          *subgrid;
    Subvector        *ps_sub;
@@ -98,7 +100,6 @@ void         YSlope(
 
    double           *data;
    double           *psdat, *sy_values_dat;
-   //double            slopey[60][32][392];
 
    int               ix, iy, iz;
    int               nx, ny, nz;
@@ -107,6 +108,7 @@ void         YSlope(
    int               is, i, j, k, ips, ipicv;
    double            time=0.0;
 
+   (void)dummy;
 
    /*-----------------------------------------------------------------------
     * Put in any user defined sources for this phase
@@ -201,7 +203,7 @@ void         YSlope(
 	       {
 		  GrGeomInLoop(i, j, k, gr_domain, r, ix, iy, iz, nx, ny, nz,
 			       {
-				  ips = SubvectorEltIndex(ps_sub, i, j, k);
+				  ips = SubvectorEltIndex(ps_sub, i, j, 0);
 				  x = RealSpaceX(i, SubgridRX(subgrid));
 				  /* nonlinear case -div(p grad p) = f */
 				  data[ips] = -1.0;
@@ -214,7 +216,7 @@ void         YSlope(
 	       {
 		  GrGeomInLoop(i, j, k, gr_domain, r, ix, iy, iz, nx, ny, nz,
 			       {
-				  ips = SubvectorEltIndex(ps_sub, i, j, k);
+				  ips = SubvectorEltIndex(ps_sub, i, j, 0);
 				  /* nonlinear case -div(p grad p) = f */
 				  data[ips] = -3.0;
 			       });
@@ -226,7 +228,7 @@ void         YSlope(
 	       {
 		  GrGeomInLoop(i, j, k, gr_domain, r, ix, iy, iz, nx, ny, nz,
 			       {
-				  ips = SubvectorEltIndex(ps_sub, i, j, k);
+				  ips = SubvectorEltIndex(ps_sub, i, j, 0);
 				  x = RealSpaceX(i, SubgridRX(subgrid));
 				  y = RealSpaceY(j, SubgridRY(subgrid));
 				  /* nonlinear case -div(p grad p) = f */
@@ -240,7 +242,7 @@ void         YSlope(
 	       {
 		  GrGeomInLoop(i, j, k, gr_domain, r, ix, iy, iz, nx, ny, nz,
 			       {
-				  ips = SubvectorEltIndex(ps_sub, i, j, k);
+				  ips = SubvectorEltIndex(ps_sub, i, j, 0);
 				  x = RealSpaceX(i, SubgridRX(subgrid));
 				  y = RealSpaceY(j, SubgridRY(subgrid));
 				  z = RealSpaceZ(k, SubgridRZ(subgrid));
@@ -256,7 +258,7 @@ void         YSlope(
 	       {
 		  GrGeomInLoop(i, j, k, gr_domain, r, ix, iy, iz, nx, ny, nz,
 			       {
-				  ips = SubvectorEltIndex(ps_sub, i, j, k);
+				  ips = SubvectorEltIndex(ps_sub, i, j, 0);
 				  x = RealSpaceX(i, SubgridRX(subgrid));
 				  y = RealSpaceY(j, SubgridRY(subgrid));
 				  z = RealSpaceZ(k, SubgridRZ(subgrid));
@@ -272,7 +274,7 @@ void         YSlope(
 	       {
 		  GrGeomInLoop(i, j, k, gr_domain, r, ix, iy, iz, nx, ny, nz,
 			       {
-				  ips = SubvectorEltIndex(ps_sub, i, j, k);
+				  ips = SubvectorEltIndex(ps_sub, i, j, 0);
 				  x = RealSpaceX(i, SubgridRX(subgrid));
 				  y = RealSpaceY(j, SubgridRY(subgrid));
 				  z = RealSpaceZ(k, SubgridRZ(subgrid));
@@ -323,10 +325,9 @@ void         YSlope(
 	    GrGeomInLoop(i,j,k,gr_domain,r,ix,iy,iz,nx,ny,nz,
 			 {
 			    ips = SubvectorEltIndex(ps_sub,i,j,0);
-			    ipicv = SubvectorEltIndex(sy_values_sub,i,j,k);
+			    ipicv = SubvectorEltIndex(sy_values_sub,i,j,0);
 
 			    psdat[ips] = sy_values_dat[ipicv];
-			    //slopey[i][j][k] = sy_values_dat[ipicv];
 			 });
 	 } /* End subgrid loop */
 
@@ -346,7 +347,8 @@ void         YSlope(
  *--------------------------------------------------------------------------*/
 
 PFModule  *YSlopeInitInstanceXtra(
-   Grid    *grid)
+   Grid    *grid3d,
+   Grid    *grid2d)
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
@@ -354,28 +356,27 @@ PFModule  *YSlopeInitInstanceXtra(
 
    Type2  *dummy2;
    
-   /*Vector *dat;
-     Subvector *dat_sub;
-     double *dat_dat;
-     int i,j,k,ip;
-     double value[60][32][392];*/
-
- 
-
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
       instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
-   if (grid != NULL)
+   if (grid3d != NULL)
    {
-      (instance_xtra -> grid) = grid;
+      (instance_xtra -> grid3d) = grid3d;
+   }
+
+   if (grid2d != NULL)
+   {
+      (instance_xtra -> grid2d) = grid2d;
 
       if (public_xtra -> type == 2)
       {
 	 dummy2 = (Type2 *)(public_xtra -> data);
 
-	 dummy2 -> sy_values = NewVector(grid, 1, 1);
+	 dummy2 -> sy_values = NewVectorType(grid2d, 1, 1,
+					     vector_cell_centered_2D);
+					 
 	 ReadPFBinary((dummy2 -> filename),(dummy2 -> sy_values));
       }
    }

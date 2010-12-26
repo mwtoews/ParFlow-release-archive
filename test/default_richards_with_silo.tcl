@@ -9,6 +9,14 @@ lappend auto_path $env(PARFLOW_DIR)/bin
 package require parflow
 namespace import Parflow::*
 
+# Examples of compression options for SILO
+# Note compression only works for HDF5
+#pfset SILO.Filetype "HDF5"
+#pfset SILO.CompressionOptions "METHOD=GZIP"
+#pfset SILO.CompressionOptions "METHOD=SZIP"
+#pfset SILO.CompressionOptions "METHOD=FPZIP"
+#pfset SILO.CompressionOptions "ERRMODE=FALLBACK METHOD=GZIP"
+
 pfset FileVersion 4
 
 pfset Process.Topology.P 1
@@ -320,7 +328,7 @@ pfset Solver.Nonlinear.DerivativeEpsilon                 1e-2
 
 pfset Solver.Linear.KrylovDimension                      10
 
-pfset Solver.Linear.Preconditioner                       MGSemi
+pfset Solver.Linear.Preconditioner                       PFMGOctree
 pfset Solver.Linear.Preconditioner.MGSemi.MaxIter        1
 pfset Solver.Linear.Preconditioner.MGSemi.MaxLevels      100
 
@@ -367,6 +375,15 @@ foreach i "00000 00001 00002 00003 00004 00005" {
 #
 set silo [pfload default_richards.out.press.00000.silo]
 set pfb  [pfload default_richards.out.press.00000.pfb]
+set diff [pfmdiff $silo $pfb 12]
+if {[string length $diff] != 0 } {
+    puts "FAILED : Silo output does not match PFB output"
+    puts $diff
+    set passed 0
+} 
+
+set silo [pfload default_richards.out.porosity.silo]
+set pfb  [pfload default_richards.out.porosity.pfb]
 set diff [pfmdiff $silo $pfb 12]
 if {[string length $diff] != 0 } {
     puts "FAILED : Silo output does not match PFB output"

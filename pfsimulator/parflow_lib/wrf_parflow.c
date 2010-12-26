@@ -34,6 +34,8 @@
 #include "parflow.h"
 #include "solver.h"
 
+#include <string.h>
+
 amps_ThreadLocalDcl(PFModule *, Solver_module);
 amps_ThreadLocalDcl(PFModule *, solver);
 amps_ThreadLocalDcl(Vector   *, evap_trans);
@@ -103,7 +105,7 @@ void wrfparflowinit_(char *input_file) {
    grid = CreateGrid(GlobalsUserGrid);
    
    /* Create the PF vector holding flux */
-   amps_ThreadLocal(evap_trans) = NewVector( grid, 1, 1 );
+   amps_ThreadLocal(evap_trans) = NewVectorType( grid, 1, 1, vector_cell_centered );
    InitVectorAll(amps_ThreadLocal(evap_trans), 0.0);
 
 }
@@ -129,11 +131,7 @@ void wrfparflowadvance_(double *current_time,
    Vector       *porosity_out;
    Vector       *saturation_out;
 
-   CommHandle   *handle;
-
-   // AdvanceRichards should not use select_time_step module to compute dt.
-   // Use the provided dt with possible subcycling if it does not converge.
-   int compute_time_step = 0; 
+   VectorUpdateCommHandle   *handle;
 
    WRF2PF(wrf_flux, *num_soil_layers, 
 	  *ghost_size_i_lower, *ghost_size_j_lower, 
@@ -155,26 +153,36 @@ void wrfparflowadvance_(double *current_time,
    // SGS what should this be set to?
    double min_step = *dt * 1e-8;
 
-   PFModule *time_step_control = PFModuleNewModule(SelectTimeStep, (
-			  initial_step,
-			  growth_factor,
-			  max_step,
-			  min_step));
+   PFModule *time_step_control;
 
-   PFModuleNewInstance(time_step_control, ());
+   time_step_control = NewPFModule((void *)SelectTimeStep,
+				   (void *)WRFSelectTimeStepInitInstanceXtra, \
+				   (void *)SelectTimeStepFreeInstanceXtra, \
+				   (void *)WRFSelectTimeStepNewPublicXtra, \
+				   (void *)WRFSelectTimeStepFreePublicXtra, \
+				   (void *)SelectTimeStepSizeOfTempData, \
+				   NULL, NULL);
+   
+   ThisPFModule = time_step_control;
+   WRFSelectTimeStepNewPublicXtra(initial_step,
+				  growth_factor,
+				  max_step,
+				  min_step);
+   ThisPFModule = NULL;
+
+   PFModule *time_step_control_instance = PFModuleNewInstance(time_step_control, ());
 
    AdvanceRichards(amps_ThreadLocal(solver),
 		   *current_time, 
 		   stop_time, 
-		   time_step_control,
+		   time_step_control_instance,
 		   amps_ThreadLocal(evap_trans),
 		   &pressure_out, 
 		   &porosity_out,
 		   &saturation_out);
 
-   PFModuleFreeModuleInstance(time_step_control);
+   PFModuleFreeInstance(time_step_control_instance);
    PFModuleFreeModule(time_step_control);
-
 
    /* TODO: SGS 
       Are these needed here?  Decided to put them in just be safe but

@@ -108,19 +108,14 @@ typedef enum
  * function prototypes
  *-----------------------------------------------------------------------*/
 
-#ifdef __STDC__
-# define        ANSI_PROTO(s) s
-#else
-# define ANSI_PROTO(s) ()
-#endif
-
-
 /* databox.c */
-Databox *NewDatabox ANSI_PROTO((int nx , int ny , int nz , double x , double y , double z , double dx , double dy , double dz ));
-void GetDataboxGrid ANSI_PROTO((Tcl_Interp *interp , Databox *databox ));
-void FreeDatabox ANSI_PROTO((Databox *databox ));
-
-#undef ANSI_PROTO
+Databox *NewDatabox(int nx , int ny , int nz , double x , double y , double z , double dx , double dy , double dz);
+Databox *NewDataboxDefault(int nx , int ny , int nz , double x , double y , double z , double dx , double dy , double dz,
+   double default_value);
+void GetDataboxGrid(Tcl_Interp *interp , Databox *databox );
+void SetDataboxGrid(Databox *databox , int nx , int ny , int nz , double x , double y , double z , 
+   double dx , double dy , double dz);
+void FreeDatabox(Databox *databox );
 
 #endif
 

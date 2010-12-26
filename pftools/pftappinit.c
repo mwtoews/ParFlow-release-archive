@@ -151,6 +151,8 @@ EXPORT(int,Parflow_Init)(Tcl_Interp *interp)
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfgetgrid", (Tcl_CmdProc *)GetGridCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfsetgrid", (Tcl_CmdProc *)SetGridCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfcvel", (Tcl_CmdProc *)CVelCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfvvel", (Tcl_CmdProc *)VVelCommand,
@@ -203,7 +205,19 @@ EXPORT(int,Parflow_Init)(Tcl_Interp *interp)
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfcomputetop", (Tcl_CmdProc *)ComputeTopCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfcomputebottom", (Tcl_CmdProc *)ComputeBottomCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfextracttop", (Tcl_CmdProc *)ExtractTopCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfcomputedomain", (Tcl_CmdProc *)ComputeDomainCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfprintdomain", (Tcl_CmdProc *)PrintDomainCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfextract2Ddomain", (Tcl_CmdProc *)Extract2DDomainCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfbuilddomain", (Tcl_CmdProc *)BuildDomainCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfdistondomain", (Tcl_CmdProc *)PFDistOnDomainCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfsurfacestorage", (Tcl_CmdProc *)SurfaceStorageCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
@@ -215,6 +229,31 @@ EXPORT(int,Parflow_Init)(Tcl_Interp *interp)
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
    Tcl_CreateCommand(interp, "Parflow::pfwatertabledepth", (Tcl_CmdProc *)WaterTableDepthCommand,
                      (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfslopex", (Tcl_CmdProc *)SlopeXUpwindCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfslopey", (Tcl_CmdProc *)SlopeYUpwindCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfupstreamarea", (Tcl_CmdProc *)UpstreamAreaCommand, 
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pffillflats", (Tcl_CmdProc *)FillFlatsCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfpitfilldem", (Tcl_CmdProc *)PitFillCommand, 
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfmovingavgdem", (Tcl_CmdProc *)MovingAvgCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfslopeD8", (Tcl_CmdProc *)SlopeD8Command,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfsegmentD8", (Tcl_CmdProc *)SegmentD8Command,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfchildD8", (Tcl_CmdProc *)ChildD8Command, 
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfflintslaw", (Tcl_CmdProc *)FlintsLawCommand, 
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfflintslawfit", (Tcl_CmdProc *)FlintsLawFitCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+   Tcl_CreateCommand(interp, "Parflow::pfflintslawbybasin", (Tcl_CmdProc *)FlintsLawByBasinCommand,
+                     (ClientData) data, (Tcl_CmdDeleteProc *) NULL);
+
 
 #ifdef SGS
    Tcl_CreateExitHandler((Tcl_ExitProc *)PFTExitProc, (ClientData) data);

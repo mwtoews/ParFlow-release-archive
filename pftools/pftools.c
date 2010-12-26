@@ -52,8 +52,6 @@
 #include "grid.h"
 #include "usergrid.h"
 #include "file.h"
-#include "water_balance.h"
-#include "water_table.h"
 
 #include <tcl.h>
 
@@ -70,7 +68,10 @@
 #include "file.h"
 #include "load.h"
 #include "top.h"
+#include "compute_domain.h"
+#include "water_table.h"
 #include "water_balance.h"
+#include "toposlopes.h"
 
 #include "region.h"
 #include "grid.h"
@@ -84,12 +85,12 @@
  *   distribute the data
  *-----------------------------------------------------------------------*/
 
-void           Load(type, filename, all_subgrids, background, databox)
-int            type;
-char          *filename;
-SubgridArray  *all_subgrids;
-Background    *background;
-Databox       *databox;
+void           Load(
+   int            type,
+   char          *filename,
+   SubgridArray  *all_subgrids,
+   Background    *background,
+   Databox       *databox)
 {
    switch(type)
    {
@@ -109,11 +110,11 @@ Databox       *databox;
  * Cmd. syntax: pfdist filename
  *-----------------------------------------------------------------------*/
 
-int            PFDistCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            PFDistCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
 
    char *filename;
@@ -208,6 +209,114 @@ char          *argv[];
        FreeBackground(background);
        FreeGrid(user_grid);
        FreeSubgridArray(all_subgrids);
+       FreeDatabox(inbox);
+       
+       return TCL_OK;
+    }
+    else
+    {
+       InvalidFileExtensionError(interp, 1, LOADPFUSAGE);
+       return TCL_ERROR;
+    }
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfdistondomain' command
+ * Description: distributes the file to the virtual distributed file 
+ *              system.  Based on supplied domain.
+ *              
+ * Cmd. syntax: pfdist filename domain
+ *-----------------------------------------------------------------------*/
+
+int            PFDistOnDomainCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+
+   Data       *data = (Data *)clientData;
+
+   char *filename;
+   char *filetype;
+
+
+   Databox *inbox;
+
+   char command[1024];
+
+   if (argc != 3)
+   {
+      WrongNumArgsError(interp, PFDISTONDOMAINUSAGE);
+      return TCL_ERROR;
+   }
+
+    filename = argv[1];
+
+    /* Make sure the file extension is valid */
+    
+    if ((filetype = GetValidFileExtension(filename)) == (char *)NULL)
+    {
+       InvalidFileExtensionError(interp, 1, PFDISTONDOMAINUSAGE);
+       return TCL_ERROR;
+    }
+
+    if (strcmp (filetype, "pfb") == 0)
+    {
+
+       /*--------------------------------------------------------------------
+	* Get the initial grid info from the database
+	*--------------------------------------------------------------------*/
+       Background    *background = ReadBackground(interp);
+
+       /*--------------------------------------------------------------------
+	* Get inbox from input_filename
+	*--------------------------------------------------------------------*/
+
+       inbox = Read(ParflowB, filename);
+
+       /*--------------------------------------------------------------------
+	* Get domain from user argument
+	*--------------------------------------------------------------------*/
+       char       *domain_hashkey = argv[2];
+       SubgridArray *domain;
+       Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
+       if ((domain = (SubgridArray*)DataMember(data, domain_hashkey, entryPtr)) == NULL)
+       {
+	  SetNonExistantError(interp, domain_hashkey);
+	  return TCL_ERROR;
+       }
+
+       /*--------------------------------------------------------------------
+	* Load the data
+	*--------------------------------------------------------------------*/
+
+       if (!domain)
+       {
+	  printf("Incorrect process allocation input\n");
+	  exit(1);
+       }
+
+#ifdef _WIN32
+       sprintf(command, "move %s %s.bak", filename, filename);
+       system(command);
+#else
+       sprintf(command, "mv %s %s.bak", filename, filename);
+       system(command);
+#endif
+
+       Load(ParflowB, filename, domain, background, inbox); 
+
+#ifdef _WIN32
+       sprintf(command, "del %s.bak", filename); 
+       system(command);
+#else
+       sprintf(command, "%s.bak", filename);
+       unlink(command);
+#endif
+       
+       FreeBackground(background);
        FreeDatabox(inbox);
        
        return TCL_OK;
@@ -371,18 +480,67 @@ double GetDouble(Tcl_Interp *interp, char *key)
 
 Data    *InitPFToolsData()
 {
-   Data *new;  /* Data structure used to hold data set hash table */
+   Data *new_data;  /* Data structure used to hold data set hash table */
 
-   if ((new = calloc(1, sizeof (Data))) == NULL)
+   if ((new_data = (Data*)calloc(1, sizeof (Data))) == NULL)
       return (NULL);
 
-   Tcl_InitHashTable(&DataMembers(new), TCL_STRING_KEYS);
+   Tcl_InitHashTable(&DataMembers(new_data), TCL_STRING_KEYS);
 
-   DataGridType(new) = cell;
-   DataTotalMem(new) = 0;
-   DataNum(new) = 0;
+   DataGridType(new_data) = cell;
+   DataTotalMem(new_data) = 0;
+   DataNum(new_data) = 0;
 
-   return new;
+   return new_data;
+}
+
+/* Function AddSubgridArray - This function adds a pointer to a new
+ * subgrid array to the hash table of subgrid array pointers.  A
+ * hash key used to access the pointer is generated automatically.
+ *                                                                              
+ * Parameters                                                                   
+ * ----------                                                                   
+ * Data    *data    - The structure containing the hash table                   
+ * SubgridArray *databox - Data set pointer to be stored int the hash table          
+* char    *label   - Label of used to describe the data set                    
+* char    *hashkey - String used as the new data set's hash key                
+*                                                                              
+* Return value - int - Zero if the space could not be allocated for the        
+*                      table entry.  One if the allocation was successful.     
+*/
+
+int       AddSubgridArray(
+   Data     *data,
+   SubgridArray    *subgrid_array,
+   char     *label,
+   char     *hashkey)
+{
+   Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
+   int            new_data;       /* 1 if the hashkey already exists        */
+   int            num;       /* The number of the data set to be added */
+
+   num = 0;
+
+   /* Keep tring to find a unique hash key */
+   do
+   {
+      sprintf(hashkey, "subgridarray%d", num); 
+      if ((entryPtr = Tcl_CreateHashEntry(&DataMembers(data), hashkey, &new_data))
+          == NULL)
+         return (0);
+      
+      num++;
+
+   } while (!new_data);
+
+   /* Truncate the label if it is too large */
+
+   if ((strlen(label) + 1) > MAX_LABEL_SIZE)
+      label[MAX_LABEL_SIZE - 1] = 0; 
+      
+   Tcl_SetHashValue(entryPtr, subgrid_array);
+
+   return (1);
 }
 
 
@@ -401,14 +559,14 @@ Data    *InitPFToolsData()
 /* Return value - int - Zero if the space could not be allocated for the        */
 /*                      table entry.  One if the allocation was successful.     */
 
-int       AddData(data, databox, label, hashkey)
-Data     *data;
-Databox  *databox;
-char     *label;
-char     *hashkey;
+int       AddData(
+   Data     *data,
+   Databox  *databox,
+   char     *label,
+   char     *hashkey)
 {
    Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
-   int            new;       /* 1 if the hashkey already exists        */
+   int            new_data;       /* 1 if the hashkey already exists        */
    int            num;       /* The number of the data set to be added */
 
    num = DataNum(data);
@@ -418,13 +576,13 @@ char     *hashkey;
    do
    {
       sprintf(hashkey, "dataset%d", num); 
-      if ((entryPtr = Tcl_CreateHashEntry(&DataMembers(data), hashkey, &new))
+      if ((entryPtr = Tcl_CreateHashEntry(&DataMembers(data), hashkey, &new_data))
           == NULL)
          return (0);
       
       num++;
 
-   } while (!new);
+   } while (!new_data);
 
    /* Truncate the label if it is too large */
 
@@ -454,8 +612,8 @@ char     *hashkey;
 /* Return value - void								*/
 /*								                */
 
-void               PFTExitProc(clientData)
-ClientData clientData;
+void               PFTExitProc(
+   ClientData clientData)
 {
    Tcl_HashSearch  search;
    Tcl_HashEntry  *entryPtr;
@@ -500,9 +658,9 @@ ClientData clientData;
 /*                       1 if n1 in key1 is greater than n2 in key2		*/
 /*                       0 if they are equal    				*/
 
-int keycompare (key1, key2)
-const void *key1;
-const void *key2;
+int keycompare (
+   const void *key1,
+   const void *key2)
 {
    char *endnum1;           /* Points to the end of string key1 points to   */
    char *endnum2;           /* Points to the end of string key2 points to   */
@@ -603,11 +761,11 @@ const void *key2;
  * Cmd. Syntax: pfgetsubbox dataset il jl kl iu ju ku
  *-----------------------------------------------------------------------*/
 
-int               GetSubBoxCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               GetSubBoxCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -715,11 +873,11 @@ char             *argv[];
  * Cmd. Syntax: pfenlargebox dataset sx sy sz
  *-----------------------------------------------------------------------*/
 
-int               EnlargeBoxCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               EnlargeBoxCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -803,14 +961,14 @@ char             *argv[];
  * routine for `pfreload' command
  * Description: One arguments is required; the name of the dataset to
  *              reload.
- * Cmd. syntax: pfload dataset
+ * Cmd. syntax: pfreload dataset
  *-----------------------------------------------------------------------*/
 
-int            ReLoadPFCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            ReLoadPFCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -822,6 +980,8 @@ char          *argv[];
    char          *filetype;
 
    FILE           *fp;
+
+   double default_value = 0.0;
 
    if ( argc != 2 )
    {
@@ -865,17 +1025,17 @@ char          *argv[];
    }
 
    if (strcmp (filetype, "pfb") == 0)
-      databox = ReadParflowB(filename);
+      databox = ReadParflowB(filename, default_value);
    else if (strcmp(filetype, "pfsb") == 0)
-      databox = ReadParflowSB(filename);
+      databox = ReadParflowSB(filename, default_value);
    else if (strcmp(filetype, "sa") == 0)
-      databox = ReadSimpleA(filename);
+      databox = ReadSimpleA(filename, default_value);
    else if (strcmp(filetype, "sb") == 0)
-      databox = ReadSimpleB(filename);
+      databox = ReadSimpleB(filename, default_value);
    else if (strcmp(filetype, "silo") == 0)
-      databox = ReadSilo(filename);
+      databox = ReadSilo(filename, default_value);
    else
-      databox = ReadRealSA(filename);
+      databox = ReadRealSA(filename, default_value);
 
    strcpy(DataboxLabel(databox), filename);
    Tcl_SetHashValue(entryPtr, databox);
@@ -891,14 +1051,14 @@ char          *argv[];
  *              the following filename is.  If no option is given, then
  *              the filename extension is used to determine the type of
  *              the file.
- * Cmd. syntax: pfload [-option] filename
+ * Cmd. syntax: pfload [-option] filename [default_value]
  *-----------------------------------------------------------------------*/
 
-int            LoadPFCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            LoadPFCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Data       *data = (Data *)clientData;
 
@@ -906,6 +1066,8 @@ char          *argv[];
 
    char       *filetype, *filename;
    char        newhashkey[MAX_KEY_SIZE];
+
+   double     default_value = 0.0;
 
 
    /* Check and see if there is at least one argument following  */
@@ -933,21 +1095,29 @@ char          *argv[];
 
       /* Make sure a filename follows the option */
 
-      if (argc == 2)
+      if (argc == 2 || argc == 3)
       {
          MissingFilenameError(interp, 1, LOADPFUSAGE);
          return TCL_ERROR;
       }
       else
         filename = argv[2];
+
+      if(argc == 4) {
+	 if (Tcl_GetDouble(interp, argv[3], &default_value) == TCL_ERROR)
+	 {
+	    NotADoubleError(interp, 1, LOADPFUSAGE);
+	    return TCL_ERROR;
+	 }
+      }
+	 
    }
-
-   /* If no option is given, then check the extension of the   */
-   /* filename.  If the extension on the filename is invalid,  */
-   /* then give an error.                                      */
-
    else
    {
+      /* If no option is given, then check the extension of the   */
+      /* filename.  If the extension on the filename is invalid,  */
+      /* then give an error.                                      */
+
       filename = argv[1];
 
       /* Make sure the file extension is valid */
@@ -958,22 +1128,29 @@ char          *argv[];
          return TCL_ERROR;
       }
 
+      if(argc == 3) {
+	 if (Tcl_GetDouble(interp, argv[2], &default_value) == TCL_ERROR)
+	 {
+	    NotADoubleError(interp, 1, LOADPFUSAGE);
+	    return TCL_ERROR;
+	 }
+      }
    }
 
    if (strcmp (filetype, "pfb") == 0)
-      databox = ReadParflowB(filename);
+      databox = ReadParflowB(filename, default_value);
    else if (strcmp(filetype, "pfsb") == 0)
-      databox = ReadParflowSB(filename);
+      databox = ReadParflowSB(filename, default_value);
    else if (strcmp(filetype, "sa") == 0)
-      databox = ReadSimpleA(filename);
+      databox = ReadSimpleA(filename, default_value);
    else if (strcmp(filetype, "sb") == 0)
-      databox = ReadSimpleB(filename);
+      databox = ReadSimpleB(filename, default_value);
    else if (strcmp(filetype, "fld") == 0)
-      databox = ReadAVSField(filename);
+      databox = ReadAVSField(filename, default_value);
    else if (strcmp(filetype, "silo") == 0)
-      databox = ReadSilo(filename);
+      databox = ReadSilo(filename, default_value);
    else
-      databox = ReadRealSA(filename);
+      databox = ReadRealSA(filename, default_value);
 
    /* Make sure the memory for the data was allocated */
 
@@ -1009,11 +1186,11 @@ char          *argv[];
  * Cmd. syntax: pfloadsds filename dsnum
  *-----------------------------------------------------------------------*/
 
-int            LoadSDSCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            LoadSDSCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Data       *data = (Data *)clientData;
 
@@ -1089,11 +1266,11 @@ char          *argv[];
  * Cmd. syntax: pfsave dataset -filetype filename
  *-----------------------------------------------------------------------*/
 
-int               SavePFCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               SavePFCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -1166,7 +1343,6 @@ char             *argv[];
    }
 
 
-   // IMF: Added for copying 2D flux fields from silo -> sa
    else if (strcmp(filetype, "sa2d") == 0) {
       /* Make sure the file could be opened */
       if ((fp = fopen(filename, "wb")) == NULL)
@@ -1233,11 +1409,11 @@ char             *argv[];
  * Cmd. syntax: pfsavesds dataset -filetype filename 
  *-----------------------------------------------------------------------*/
 
-int              SaveSDSCommand(clientData, interp, argc, argv)
-ClientData       clientData;
-Tcl_Interp      *interp;
-int              argc;
-char            *argv[];
+int              SaveSDSCommand(
+   ClientData       clientData,
+   Tcl_Interp      *interp,
+   int              argc,
+   char            *argv[])
 {
   Data          *data = (Data *)clientData;
 
@@ -1327,11 +1503,11 @@ char            *argv[];
  * Cmd. Syntax: pfgetlist [dataset]
  *-----------------------------------------------------------------------*/
 
-int                GetListCommand(clientData, interp, argc, argv)
-ClientData         clientData;
-Tcl_Interp        *interp;
-int                argc;
-char              *argv[];
+int                GetListCommand(
+   ClientData         clientData,
+   Tcl_Interp        *interp,
+   int                argc,
+   char              *argv[])
 {
    Data           *data = (Data *)clientData;
 
@@ -1449,11 +1625,11 @@ char              *argv[];
  * Cmd. syntax: pfgetelt dataset i j k
  *-----------------------------------------------------------------------*/
 
-int               GetEltCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               GetEltCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -1530,18 +1706,16 @@ char             *argv[];
  * Cmd. syntax: pfgetgrid dataset
  *-----------------------------------------------------------------------*/
 
-int               GetGridCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               GetGridCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
    Tcl_HashEntry *entryPtr;
    Databox       *databox;
-
-
   
    /* One argument must be passed to the pfgetgrid command */
 
@@ -1565,7 +1739,6 @@ char             *argv[];
 }
 
 
-
 /*-----------------------------------------------------------------------
  * routine for `pfgridtype' command
  * Description: The argument is either vertex or cell.  A vertex grid
@@ -1576,11 +1749,11 @@ char             *argv[];
  * Cmd. syntax: pfgridtype [vertex | cell]
  *-----------------------------------------------------------------------*/
 
-int            GridTypeCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            GridTypeCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Data       *data = (Data *)clientData;
 
@@ -1638,11 +1811,11 @@ char          *argv[];
  * Cmd. syntax: pfcvel conductivity phead 
  *-----------------------------------------------------------------------*/
 
-int               CVelCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CVelCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
    
@@ -1743,11 +1916,11 @@ char             *argv[];
  * Cmd. Syntax: pfvvel conductivity phead 
  *-----------------------------------------------------------------------*/
 
-int               VVelCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               VVelCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -1847,11 +2020,11 @@ char             *argv[];
  * Cmd. Syntax: pfbfcvel conductivity phead 
  *-----------------------------------------------------------------------*/
 
-int               BFCVelCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               BFCVelCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -1953,11 +2126,11 @@ char             *argv[];
  * Cmd. Syntax: pfvmag datasetx datasety datasetz
  *-----------------------------------------------------------------------*/
 
-int               VMagCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               VMagCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -2051,11 +2224,11 @@ char             *argv[];
  * Cmd. Syntax: pfhhead phead 
  *-----------------------------------------------------------------------*/
 
-int               HHeadCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               HHeadCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -2125,11 +2298,11 @@ char             *argv[];
  * Cmd. Syntax: pfphead hhead 
  *-----------------------------------------------------------------------*/
 
-int               PHeadCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               PHeadCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -2198,11 +2371,11 @@ char             *argv[];
  * Cmd. Syntax: pfflux conductivity hhead 
  *-----------------------------------------------------------------------*/
 
-int               FluxCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               FluxCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -2290,11 +2463,11 @@ char             *argv[];
  * Cmd. Syntax: pfnewgrid {nx ny nz} {x y z} {dx dy dz} label
  *-----------------------------------------------------------------------*/
 
-int               NewGridCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               NewGridCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -2405,6 +2578,115 @@ char             *argv[];
 
 
 /*-----------------------------------------------------------------------
+ * routine for `pfsetgrid' command
+ * Description: Reset the grid information on an existing grid (e.g., for
+ *              a variable read in from simple ascii, which ends up with 
+ *              default values for x,y,z and dx,dy,dz). Arguments are three 
+ *              the label of the given variable and three lists.  The first 
+ *              list is the number of coordinates in the x, y, and z
+ *              directions.  The second list will describe the origin.
+ *              The third contains the intervals between coordinates
+ *              along each axis.  The hash key for the data set created
+ *              will be appended to the Tcl result.
+ *
+ * Cmd. Syntax: pfsetgrid {nx ny nz} {x y z} {dx dy dz} dataset
+ *-----------------------------------------------------------------------*/
+
+int               SetGridCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+
+   Data          *data = (Data *)clientData;
+  
+   Databox       *databox;
+   char          *hashkey;
+   Tcl_HashEntry *entryPtr;
+
+   char          *npoints, *origin, *intervals;
+   char          *num;
+   int            nx, ny, nz;
+   double         x,  y,  z;
+   double         dx, dy, dz;
+
+   /* Five arguments must be given */
+   if (argc != 5)
+   {
+      WrongNumArgsError(interp, NEWGRIDUSAGE);
+      return TCL_ERROR;
+   }
+
+   npoints     = argv[1];
+   origin      = argv[2];
+   intervals   = argv[3];
+   hashkey     = argv[4];
+
+   /* Make sure that the number of points along each axis are all */
+   /* integers.                                                   */
+   if (!(num = strtok(npoints, WS)) || (sscanf(num, "%d", &nx) != 1) ||
+       !(num = strtok(NULL, WS))    || (sscanf(num, "%d", &ny) != 1) ||
+       !(num = strtok(NULL, WS))    || (sscanf(num, "%d", &nz) != 1))
+   {
+      NotAnIntError(interp, 1, SETGRIDUSAGE);
+      return TCL_ERROR;
+   }
+
+   /* there should only be three numbers in the npoints list */
+   if (strtok(NULL, WS))
+   {
+      InvalidArgError(interp, 1, SETGRIDUSAGE);
+      return TCL_ERROR;
+   }
+
+   /* Make sure that the origin is given in floating point numbers */
+   if (!(num = strtok(origin, WS)) || (sscanf(num, "%lf", &x) != 1) ||
+       !(num = strtok(NULL, WS))   || (sscanf(num, "%lf", &y) != 1) ||
+       !(num = strtok(NULL, WS))   || (sscanf(num, "%lf", &z) != 1))
+   {
+      NotADoubleError(interp, 2, SETGRIDUSAGE);
+      return TCL_ERROR;
+   }
+
+   /* There should only be three numbers in the origin list */
+   if (strtok(NULL, WS))
+   {
+      InvalidArgError(interp, 2, SETGRIDUSAGE);
+      return TCL_ERROR;
+   }
+
+   /* Make sure that the intervals are given in floating point numbers */
+   if (!(num = strtok(intervals, WS)) || (sscanf(num, "%lf", &dx) != 1) ||
+       !(num = strtok(NULL, WS))      || (sscanf(num, "%lf", &dy) != 1) ||
+       !(num = strtok(NULL, WS))      || (sscanf(num, "%lf", &dz) != 1))
+   {
+      NotADoubleError(interp, 3, SETGRIDUSAGE);
+      return TCL_ERROR;
+   }
+
+   /* There should only be three numbers in the intervals list */
+   if (strtok(NULL, WS))
+   {
+      InvalidArgError(interp, 3, SETGRIDUSAGE);
+      return TCL_ERROR;
+   }
+
+   /* Make sure dataset exists */
+   if ((databox = DataMember(data, hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp, hashkey);
+      return TCL_ERROR;
+   }
+
+   /* Swap grid values */
+   SetDataboxGrid(databox,nx,ny,nz,x,y,z,dx,dy,dz);
+   return TCL_OK;
+
+}
+
+
+/*-----------------------------------------------------------------------
  * routine for `pfnewlabel' command
  * Description: A data set hash key and a label are passed as arguments.
  *              the data set cooresponding to the hash key will have
@@ -2413,13 +2695,11 @@ char             *argv[];
  *
  * Cmd. Syntax: pfnewlabel dataset newlabel
  *-----------------------------------------------------------------------*/
-
-
-int                NewLabelCommand(clientData, interp, argc, argv)
-ClientData         clientData;
-Tcl_Interp        *interp;
-int                argc;
-char              *argv[];
+int                NewLabelCommand(
+   ClientData         clientData,
+   Tcl_Interp        *interp,
+   int                argc,
+   char              *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -2469,11 +2749,11 @@ char              *argv[];
  * Cmd. Syntax: pfaxpy alpha datasetx datasety
  *-----------------------------------------------------------------------*/
 
-int               AxpyCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               AxpyCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -2542,11 +2822,11 @@ char             *argv[];
  * Cmd. Syntax: pfsum datasetx 
  *-----------------------------------------------------------------------*/
 
-int               SumCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               SumCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -2592,11 +2872,11 @@ char             *argv[];
  * Cmd. Syntax: pfcellsum datasetx datasety mask
  *-----------------------------------------------------------------------*/
 
-int               CellSumCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CellSumCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Tcl_HashEntry *entryPtr;
    Data          *data = (Data *)clientData;
@@ -2693,11 +2973,11 @@ char             *argv[];
  * Cmd. Syntax: pfcelldiff datasetx datasety mask
  *-----------------------------------------------------------------------*/
 
-int               CellDiffCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CellDiffCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Tcl_HashEntry *entryPtr;
    Data          *data = (Data *)clientData;
@@ -2794,11 +3074,11 @@ char             *argv[];
  * Cmd. Syntax: pfcellmult datasetx datasety mask
  *-----------------------------------------------------------------------*/
 
-int               CellMultCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CellMultCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Tcl_HashEntry *entryPtr;
    Data          *data = (Data *)clientData;
@@ -2895,11 +3175,11 @@ char             *argv[];
  * Cmd. Syntax: pfcelldiv datasetx datasety mask
  *-----------------------------------------------------------------------*/
 
-int               CellDivCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CellDivCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Tcl_HashEntry *entryPtr;
    Data          *data = (Data *)clientData;
@@ -2912,7 +3192,7 @@ char             *argv[];
    /* Check that three arguments are given */
    if (argc == 3)
    {
-      WrongNumArgsError(interp, CELLDIFFUSAGE);
+      WrongNumArgsError(interp, CELLDIVUSAGE);
       return TCL_ERROR;
    }
 
@@ -2996,11 +3276,11 @@ char             *argv[];
  * Cmd. Syntax: pfcellsumconst datasetx const mask
  *-----------------------------------------------------------------------*/
 
-int               CellSumConstCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CellSumConstCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Tcl_HashEntry *entryPtr;
    Data          *data = (Data *)clientData;
@@ -3089,11 +3369,11 @@ char             *argv[];
  * Cmd. Syntax: pfcelldiffconst datasetx const mask
  *-----------------------------------------------------------------------*/
 
-int               CellDiffConstCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CellDiffConstCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Tcl_HashEntry *entryPtr;
    Data          *data = (Data *)clientData;
@@ -3107,7 +3387,7 @@ char             *argv[];
    /* Check that three arguments are given */
    if (argc == 3)
    {
-      WrongNumArgsError(interp, CELLSUMCONSTUSAGE);
+      WrongNumArgsError(interp, CELLDIFFCONSTUSAGE);
       return TCL_ERROR;
    }
 
@@ -3115,7 +3395,7 @@ char             *argv[];
    hashkeyx      = argv[1];
    if (Tcl_GetDouble(interp, argv[2], &val) == TCL_ERROR)
    {
-      NotADoubleError(interp, 1, CELLSUMCONSTUSAGE);
+      NotADoubleError(interp, 1, CELLDIFFCONSTUSAGE);
       return TCL_ERROR;
    }
    mask_hashkey  = argv[3];
@@ -3182,11 +3462,11 @@ char             *argv[];
  * Cmd. Syntax: pfcellmultconst datasetx const mask
  *-----------------------------------------------------------------------*/
    
-int               CellMultConstCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CellMultConstCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Tcl_HashEntry *entryPtr;
    Data          *data = (Data *)clientData;
@@ -3200,7 +3480,7 @@ char             *argv[];
    /* Check that three arguments are given */
    if (argc == 3)
    {
-      WrongNumArgsError(interp, CELLSUMCONSTUSAGE);
+      WrongNumArgsError(interp, CELLMULTCONSTUSAGE);
       return TCL_ERROR;
    }
       
@@ -3208,7 +3488,7 @@ char             *argv[];
    hashkeyx      = argv[1];
    if (Tcl_GetDouble(interp, argv[2], &val) == TCL_ERROR)
    {
-      NotADoubleError(interp, 1, CELLSUMCONSTUSAGE);
+      NotADoubleError(interp, 1, CELLMULTCONSTUSAGE);
       return TCL_ERROR;
    }  
    mask_hashkey  = argv[3];
@@ -3275,11 +3555,11 @@ char             *argv[];
  * Cmd. Syntax: pfcelldivconst datasetx const mask
  *-----------------------------------------------------------------------*/
 
-int               CellDivConstCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               CellDivConstCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Tcl_HashEntry *entryPtr;
    Data          *data = (Data *)clientData;
@@ -3293,7 +3573,7 @@ char             *argv[];
    /* Check that three arguments are given */
    if (argc == 3)
    {
-      WrongNumArgsError(interp, CELLSUMCONSTUSAGE);
+      WrongNumArgsError(interp, CELLDIVCONSTUSAGE);
       return TCL_ERROR;
    }
 
@@ -3301,7 +3581,7 @@ char             *argv[];
    hashkeyx      = argv[1];
    if (Tcl_GetDouble(interp, argv[2], &val) == TCL_ERROR)
    {
-      NotADoubleError(interp, 1, CELLSUMCONSTUSAGE);
+      NotADoubleError(interp, 1, CELLDIVCONSTUSAGE);
       return TCL_ERROR;
    }
    mask_hashkey  = argv[3];
@@ -3370,11 +3650,11 @@ char             *argv[];
  * Cmd. Syntax: pfstats dataset
  *-----------------------------------------------------------------------*/
 
-int               GetStatsCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               GetStatsCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -3385,7 +3665,7 @@ char             *argv[];
    double         min, max, mean, sum, variance, stdev;
 
    Tcl_Obj     *result = Tcl_GetObjResult(interp);
-   Tcl_Obj     *int_obj;
+   Tcl_Obj     *double_obj;
 
    /* One argument must be given */
 
@@ -3407,23 +3687,23 @@ char             *argv[];
 
    Stats(databox, &min, &max, &mean, &sum, &variance, &stdev);
 
-   int_obj = Tcl_NewIntObj(min);
-   Tcl_ListObjAppendElement(interp, result, int_obj);
+   double_obj = Tcl_NewDoubleObj(min);
+   Tcl_ListObjAppendElement(interp, result, double_obj);
 
-   int_obj = Tcl_NewIntObj(max);
-   Tcl_ListObjAppendElement(interp, result, int_obj);
+   double_obj = Tcl_NewDoubleObj(max);
+   Tcl_ListObjAppendElement(interp, result, double_obj);
 
-   int_obj = Tcl_NewIntObj(mean);
-   Tcl_ListObjAppendElement(interp, result, int_obj);
+   double_obj = Tcl_NewDoubleObj(mean);
+   Tcl_ListObjAppendElement(interp, result, double_obj);
 
-   int_obj = Tcl_NewIntObj(sum);
-   Tcl_ListObjAppendElement(interp, result, int_obj);
+   double_obj = Tcl_NewDoubleObj(sum);
+   Tcl_ListObjAppendElement(interp, result, double_obj);
 
-   int_obj = Tcl_NewIntObj(variance);
-   Tcl_ListObjAppendElement(interp, result, int_obj);
+   double_obj = Tcl_NewDoubleObj(variance);
+   Tcl_ListObjAppendElement(interp, result, double_obj);
 
-   int_obj = Tcl_NewIntObj(stdev);
-   Tcl_ListObjAppendElement(interp, result, int_obj);
+   double_obj = Tcl_NewDoubleObj(stdev);
+   Tcl_ListObjAppendElement(interp, result, double_obj);
 
    return TCL_OK;
 }
@@ -3454,11 +3734,11 @@ char             *argv[];
  * Cmd. Syntax: pfmdiff hashkeyp hashkeyq sig_digs [abs_zero]
  *-----------------------------------------------------------------------*/
 
-int               MDiffCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               MDiffCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -3558,11 +3838,11 @@ char             *argv[];
  * Cmd. Syntax: pfsavediff datasetp datasetq sig_digs [abs_zero] -file filename
  *-----------------------------------------------------------------------*/
 
-int               SaveDiffCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               SaveDiffCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -3715,11 +3995,11 @@ char             *argv[];
  * Cmd. Syntax: pfdiffelt datasetp datasetq i j k sig_digs [abs_zero]
  *-----------------------------------------------------------------------*/
 
-int               DiffEltCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               DiffEltCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
 
    Data          *data = (Data *)clientData;
@@ -3863,11 +4143,11 @@ char             *argv[];
  * Cmd. Syntax: pfdelete dataset
  *-----------------------------------------------------------------------*/
 
-int               DeleteCommand(clientData, interp, argc, argv)
-ClientData        clientData;
-Tcl_Interp       *interp;
-int               argc;
-char             *argv[];
+int               DeleteCommand(
+   ClientData        clientData,
+   Tcl_Interp       *interp,
+   int               argc,
+   char             *argv[])
 {
    Data          *data = (Data *)clientData;
 
@@ -3904,11 +4184,11 @@ char             *argv[];
  * 
  * Cmd. syntax: pfcomputetop databox
  *-----------------------------------------------------------------------*/
-int            ComputeTopCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            ComputeTopCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
    Data       *data = (Data *)clientData;
@@ -3975,16 +4255,92 @@ char          *argv[];
 }
 
 /*-----------------------------------------------------------------------
+ * routine for `pfcomputebottom' command
+ * Description: One argument of a Databox containing the mask is required.
+ * 
+ * Cmd. syntax: pfcomputebottom databox
+ *-----------------------------------------------------------------------*/
+int            ComputeBottomCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
+   Data       *data = (Data *)clientData;
+
+   Databox    *mask;
+   Databox    *bottom;
+
+   char       *filename = "bottom";
+   char       *mask_hashkey;
+
+   char        newhashkey[MAX_KEY_SIZE];
+
+   /* Check and see if there is at least one argument following  */
+   /* the command.                                               */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFCOMPUTEBOTTOMUSAGE);
+      return TCL_ERROR;
+   }
+
+   mask_hashkey = argv[1];
+
+   if ((mask = DataMember(data, mask_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp, mask_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx = DataboxNx(mask);
+      int ny = DataboxNy(mask);
+
+      double x = DataboxX(mask);
+      double y = DataboxY(mask);
+      double z = DataboxZ(mask);
+      
+      double dx = DataboxDx(mask);
+      double dy = DataboxDy(mask);
+      double dz = DataboxDz(mask);
+
+      /* create the new databox structure for bottom */
+      if ( (bottom = NewDatabox(nx, ny, 1, x, y, z, dx, dy, dz)) )
+      {
+	 /* Make sure the data set pointer was added to */
+	 /* the hash table successfully.                */
+
+	 if (!AddData(data, bottom, filename, newhashkey))
+	    FreeDatabox(bottom); 
+	 else
+	 {
+	    Tcl_AppendElement(interp, newhashkey); 
+	 } 
+
+	 ComputeBottom(mask, bottom);
+      }
+      else
+      {
+	 ReadWriteError(interp);
+	 return TCL_ERROR;
+      }
+   }
+
+   return TCL_OK;
+}
+
+/*-----------------------------------------------------------------------
  * routine for `pfextracttop' command
  * Description: Extract the top cells of a dataset.
  * 
  * Cmd. syntax: pfcomputetop top data
  *-----------------------------------------------------------------------*/
-int            ExtractTopCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            ExtractTopCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
    Data       *data = (Data *)clientData;
@@ -4060,16 +4416,335 @@ char          *argv[];
 }
 
 /*-----------------------------------------------------------------------
+ * routine for `pfcomputedomain' command
+ * Description: Compute terrain following domain
+ * 
+ * Cmd. syntax: pfcomputedomain top bottom
+ *-----------------------------------------------------------------------*/
+int            ComputeDomainCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
+   Data       *data = (Data *)clientData;
+
+   /* Check and see if there is at least one argument following  */
+   /* the command.                                               */
+   if (argc == 2)
+   {
+      WrongNumArgsError(interp, PFCOMPUTEDOMAINUSAGE);
+      return TCL_ERROR;
+   }
+
+   char       *top_hashkey = argv[1];
+   Databox    *top;
+   if ((top = DataMember(data, top_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp, top_hashkey);
+      return TCL_ERROR;
+   }
+
+   char       *bottom_hashkey = argv[2];
+   Databox    *bottom;
+   if ((bottom = DataMember(data, bottom_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp, bottom_hashkey);
+      return TCL_ERROR;
+   }
+
+   /*--------------------------------------------------------------------
+    * Get the processor topology from the database 
+    *--------------------------------------------------------------------*/
+   int num_procs_x = GetInt(interp, "Process.Topology.P");
+   int num_procs_y = GetInt(interp, "Process.Topology.Q");
+   int num_procs_z = GetInt(interp, "Process.Topology.R");
+
+   if(num_procs_z > 1) {
+      // SGS Add error message here!
+      return TCL_ERROR;
+   }
+
+   int num_procs = num_procs_x * num_procs_y * num_procs_z;
+
+   /*--------------------------------------------------------------------
+    * Get the initial grid info from the database
+    *--------------------------------------------------------------------*/
+   Grid          *user_grid  = ReadUserGrid(interp);
+   
+   /*--------------------------------------------------------------------
+    * Load the data
+    *--------------------------------------------------------------------*/
+   
+   SubgridArray  *all_subgrids = DistributeUserGrid(user_grid, num_procs,
+				     num_procs_x, num_procs_y, num_procs_z);
+
+   if (!all_subgrids)
+   {
+      printf("Incorrect process allocation input\n");
+      return TCL_ERROR;
+   }
+   
+   ComputeDomain(all_subgrids, top, bottom, num_procs_x, num_procs_y, num_procs_z);
+
+   char         newhashkey[32];
+   char         label[MAX_LABEL_SIZE];
+
+   sprintf(label, "Subgrid Array");
+
+   if (!AddSubgridArray(data, all_subgrids, label, newhashkey))
+      FreeSubgridArray(all_subgrids);
+   else
+      Tcl_AppendElement(interp, newhashkey);
+
+   return TCL_OK;
+}
+
+
+int PrintDomainCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
+   Data       *data = (Data *)clientData;
+
+   /* Check and see if there is at least one argument following  */
+   /* the command.                                               */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFPRINTDOMAINUSAGE);
+      return TCL_ERROR;
+   }
+
+   char       *subgrid_array_hashkey = argv[1];
+   SubgridArray *subgrid_array;
+   if ((subgrid_array = (SubgridArray*)DataMember(data, subgrid_array_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp, subgrid_array_hashkey);
+      return TCL_ERROR;
+   }
+
+
+   Tcl_DString     result;
+   Tcl_DStringInit(&result);
+
+   char line[2048];
+
+   /*--------------------------------------------------------------------
+    * Get the processor topology from the database 
+    *--------------------------------------------------------------------*/
+   int P = GetInt(interp, "Process.Topology.P");
+   int Q = GetInt(interp, "Process.Topology.Q");
+   int R = GetInt(interp, "Process.Topology.R");
+   int num_procs = P * Q * R;
+   
+   int p;
+
+
+   sprintf(line, "pfset ProcessGrid.NumSubgrids %d\n", subgrid_array -> size);
+   Tcl_DStringAppend(&result, line, strlen(line));
+
+   for(p = 0; p < num_procs; p++)
+   {
+      int s_i;
+      ForSubgridI(s_i, subgrid_array)
+      {
+	 Subgrid* subgrid = SubgridArraySubgrid(subgrid_array, s_i);
+
+	 int process = SubgridProcess(subgrid);
+
+	 if(process == p) {
+	    int ix = SubgridIX(subgrid);
+	    int iy = SubgridIY(subgrid);
+	    int iz = SubgridIZ(subgrid);
+	    
+	    int nx = SubgridNX(subgrid);
+	    int ny = SubgridNY(subgrid);
+	    int nz = SubgridNZ(subgrid);
+
+	    sprintf(line, "pfset ProcessGrid.%d.P %d\n", s_i, process);
+	    Tcl_DStringAppend(&result, line, strlen(line));
+
+	    sprintf(line, "pfset ProcessGrid.%d.IX %d\n", s_i, ix);
+	    Tcl_DStringAppend(&result, line, strlen(line));
+
+	    sprintf(line, "pfset ProcessGrid.%d.IY %d\n", s_i, iy);
+	    Tcl_DStringAppend(&result, line, strlen(line));
+
+	    sprintf(line, "pfset ProcessGrid.%d.IZ %d\n", s_i, iz);
+	    Tcl_DStringAppend(&result, line, strlen(line));
+
+	    sprintf(line, "pfset ProcessGrid.%d.NX %d\n", s_i, nx);
+	    Tcl_DStringAppend(&result, line, strlen(line));
+
+	    sprintf(line, "pfset ProcessGrid.%d.NY %d\n", s_i, ny);
+	    Tcl_DStringAppend(&result, line, strlen(line));
+
+	    sprintf(line, "pfset ProcessGrid.%d.NZ %d\n", s_i, nz);
+	    Tcl_DStringAppend(&result, line, strlen(line));
+	 }
+      }
+   }
+
+
+   Tcl_DStringResult(interp, &result);
+   return TCL_OK;
+}
+
+
+/*
+  Builds a subgrid array from the current Parflow database key/values 
+  that specify the processor topology.
+ */
+int BuildDomainCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Data       *data = (Data *)clientData;
+   SubgridArray *subgrid_array;
+
+   Tcl_DString     result;
+
+   /* Check and see if there is at least one argument following  */
+   /* the command.                                               */
+   if (argc == 0)
+   {
+      WrongNumArgsError(interp, PFBUILDDOMAINUSAGE);
+      return TCL_ERROR;
+   }
+
+   Tcl_DStringInit(&result);
+
+   subgrid_array = NewSubgridArray();
+
+   /*--------------------------------------------------------------------
+    * Get the processor topology from the database 
+    *--------------------------------------------------------------------*/
+   int s_i;
+   int size = GetInt(interp, "ProcessGrid.NumSubgrids");
+
+   for(s_i = 0; s_i < size; s_i++) 
+   {
+      char key[1024];
+      int p;
+      
+      int ix;
+      int iy;
+      int iz;
+      
+      int nx;
+      int ny;
+      int nz;
+      
+      int rx = 0;
+      int ry = 0;
+      int rz = 0;
+
+      sprintf(key, "ProcessGrid.%d.P", s_i);
+      p = GetInt(interp, key);
+
+      sprintf(key, "ProcessGrid.%d.IX", s_i);
+      ix = GetInt(interp, key);
+
+      sprintf(key, "ProcessGrid.%d.IY", s_i);
+      iy = GetInt(interp, key);
+
+      sprintf(key, "ProcessGrid.%d.IZ", s_i);
+      iz = GetInt(interp, key);
+
+      sprintf(key, "ProcessGrid.%d.NX", s_i);
+      nx = GetInt(interp, key);
+
+      sprintf(key, "ProcessGrid.%d.NY", s_i);
+      ny = GetInt(interp, key);
+
+      sprintf(key, "ProcessGrid.%d.NZ", s_i);
+      nz = GetInt(interp, key);
+
+      AppendSubgrid(NewSubgrid(ix, iy, iz, 
+			       nx, ny, nz,
+			       rx, ry, rz,
+			       p),
+		    &subgrid_array);
+      
+   }
+
+   char         newhashkey[32];
+   char         label[MAX_LABEL_SIZE];
+
+   sprintf(label, "Subgrid Array");
+
+   if (!AddSubgridArray(data, subgrid_array, label, newhashkey))
+      FreeSubgridArray(subgrid_array);
+   else
+      Tcl_AppendElement(interp, newhashkey);
+
+   return TCL_OK;
+}
+
+int Extract2DDomainCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
+   Data       *data = (Data *)clientData;
+
+   /* Check and see if there is at least one argument following  */
+   /* the command.                                               */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFEXTRACT2DDOMAINUSAGE);
+      return TCL_ERROR;
+   }
+
+   char       *subgrid_array_hashkey = argv[1];
+   SubgridArray *subgrid_array;
+
+   if ((subgrid_array = (SubgridArray*)DataMember(data, subgrid_array_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp, subgrid_array_hashkey);
+      return TCL_ERROR;
+   }
+
+   SubgridArray  *all_subgrids = Extract2DDomain(subgrid_array);
+
+   if (!all_subgrids)
+   {
+      printf("Extract 2D Domain failed\n");
+      return TCL_ERROR;
+   }
+
+   char         newhashkey[32];
+   char         label[MAX_LABEL_SIZE];
+
+   sprintf(label, "Subgrid2D Array");
+
+   if (!AddSubgridArray(data, all_subgrids, label, newhashkey))
+      FreeSubgridArray(all_subgrids);
+   else
+      Tcl_AppendElement(interp, newhashkey);
+
+   return TCL_OK;
+}
+
+/*-----------------------------------------------------------------------
  * routine for `pfsurfacestorage' command
  * Description: Compute the surface storage 
  * 
  * Cmd. syntax: pfsufacestorage top pressure
  *-----------------------------------------------------------------------*/
-int            SurfaceStorageCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            SurfaceStorageCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
    Data       *data = (Data *)clientData;
@@ -4150,11 +4825,11 @@ char          *argv[];
  * 
  * Cmd. syntax: pfsubsurfacestorage 
  *-----------------------------------------------------------------------*/
-int            SubsurfaceStorageCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            SubsurfaceStorageCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
    Data       *data = (Data *)clientData;
@@ -4262,11 +4937,11 @@ char          *argv[];
  * 
  * Cmd. syntax: pfgwstorage 
  *-----------------------------------------------------------------------*/
-int            GWStorageCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            GWStorageCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
    Data       *data = (Data *)clientData;
@@ -4375,11 +5050,11 @@ char          *argv[];
  * 
  * Cmd. syntax: pfsurfacerunoff 
  *-----------------------------------------------------------------------*/
-int            SurfaceRunoffCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            SurfaceRunoffCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
    Data       *data = (Data *)clientData;
@@ -4492,13 +5167,13 @@ char          *argv[];
  * routine for `pfwatertabledepth' command
  * Description: Compute the water depth
  * 
- * Cmd. syntax: pfwatertabledepth top pressure
+ * Cmd. syntax: pfwatertabledepth top saturation
  *-----------------------------------------------------------------------*/
-int            WaterTableDepthCommand(clientData, interp, argc, argv)
-ClientData     clientData;
-Tcl_Interp    *interp;
-int            argc;
-char          *argv[];
+int            WaterTableDepthCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
 {
    Tcl_HashEntry *entryPtr;  /* Points to new hash table entry         */
    Data       *data = (Data *)clientData;
@@ -4571,5 +5246,1132 @@ char          *argv[];
    }
 
    return TCL_OK;
+}
+
+
+// **********************************************************************
+// IMF: NEW STUFF FOR DEM PRE-PROCESSING
+//***********************************************************************
+
+/*-----------------------------------------------------------------------
+ * routine for `pfslopex' command
+ * Description: Compute slopes in x-direction at all [i,j] using 1st order
+ *              upwind finite difference scheme 
+ *
+ * Notes:	local maxima: slope set to max downward gradient
+ *              local minima: slope set to zero (no drainage in x-dir)
+ *              otherwise:    1st order upwind finite difference
+ *
+ * Cmd. syntax: pfslopex dem 
+*-----------------------------------------------------------------------*/
+int            SlopeXUpwindCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry         
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+ 
+   // Output
+   Databox       *sx;
+   char           sx_hashkey[MAX_KEY_SIZE];
+   char          *filename = "slope_x";
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFSLOPEXUSAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for slope values (sx) */
+      if ( (sx = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, sx, filename, sx_hashkey))
+            FreeDatabox(sx);
+         else
+         {
+            Tcl_AppendElement(interp, sx_hashkey);
+         }
+         /* Compute slopex */
+         ComputeSlopeXUpwind(dem,dx,sx);
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+   return TCL_OK;
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfslopey' command
+ * Description: Compute slopes in y-direction at all [i,j] using 1st order
+ *              upwind finite difference scheme
+ *
+ * Notes:       local maxima: slope set to max downward gradient
+ *              local minima: slope set to zero (no drainage in y-dir)
+ *              otherwise:    1st order upwind finite difference
+ *
+ * Cmd. syntax: pfslopey dem 
+*-----------------------------------------------------------------------*/
+int            SlopeYUpwindCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+ 
+   // Output
+   Databox       *sy;
+   char           sy_hashkey[MAX_KEY_SIZE];
+   char          *filename = "slope_y";
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFSLOPEYUSAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for slope values (sy) */
+      if ( (sy = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, sy, filename, sy_hashkey))
+            FreeDatabox(sy);
+         else
+         {
+            Tcl_AppendElement(interp, sy_hashkey);
+         }
+         /* Compute slopey */
+         ComputeSlopeYUpwind(dem,dy,sy);
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+   return TCL_OK;
+}  
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfupstreamarea' command
+ * Description: Compute upstream contributing area for each point [i,j] 
+ *              based on neighboring slopes (sx and sy). 
+ *
+ * Notes:       loops of over all [i,j]
+ *              at each [i,j], loops over neighbors to find parent(s)
+ *              adds parent area to area[i,j]
+ *              recursively loops over each parent's neighbors, calculates
+ *                area over ALL upstream cells until reaches a divide
+ *              returns values as NUMBER OF CELLS (not actual area)
+ *                to calculate areas, simply multiply area*dx*dy
+ *
+ * Cmd. syntax: pfupstreamarea sx sy
+*-----------------------------------------------------------------------*/
+int            UpstreamAreaCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+   Databox       *sx;
+   char          *sx_hashkey;
+   Databox       *sy;
+   char          *sy_hashkey;
+
+   // Output
+   Databox       *area;
+   char           area_hashkey[MAX_KEY_SIZE];
+   char          *filename = "upstream contributing area";
+
+   /* Check if two arguments following command  */
+   if (argc == 3)
+   {
+      WrongNumArgsError(interp, PFUPSTREAMAREAUSAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   sx_hashkey  = argv[2];
+   sy_hashkey  = argv[3];
+   
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   if ((sx = DataMember(data, sx_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,sx_hashkey);
+      return TCL_ERROR;
+   }
+
+   if ((sy = DataMember(data, sy_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,sy_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(sx);
+      int ny    = DataboxNy(sx);
+      int nz    = 1;
+
+      double x  = DataboxX(sx);
+      double y  = DataboxY(sx);
+      double z  = DataboxZ(sx);
+
+      double dx = DataboxDx(sx);
+      double dy = DataboxDy(sx);
+      double dz = DataboxDz(sx);
+
+      /* create the new databox structure for area values (area) */
+      if ( (area = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, area, filename, area_hashkey))
+            FreeDatabox(area);
+         else
+         {
+            Tcl_AppendElement(interp, area_hashkey);
+         }
+
+         /* Compute areas */
+         ComputeUpstreamArea(dem,sx,sy,area);
+
+      }
+
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+
+   }
+
+   return TCL_OK;
+
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pffillflats' command
+ * Description: Find flat regions in DEM, eliminat flats by bilinearly 
+ *              interpolating elevations across flat region.
+ *
+ * Cmd. syntax: pffillflats dem
+*-----------------------------------------------------------------------*/
+int            FillFlatsCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+
+   // Output
+   Databox       *newdem;
+   char           newdem_hashkey[MAX_KEY_SIZE];
+   char          *filename = "DEM with flats filled";
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFFILLFLATSUSAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for new dem values (newdem) */
+      if ( (newdem = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, newdem, filename, newdem_hashkey))
+         {
+            FreeDatabox(newdem);
+         }
+         else
+         {
+            Tcl_AppendElement(interp, newdem_hashkey);
+         }
+
+         /* Compute DEM w/o flat regions */
+         ComputeFillFlats(dem,newdem);
+
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+   return TCL_OK;
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfpitfilldem' command
+ * Description: Iterative pit-fill routine to calculate upstream  [i,j]
+ *              based on neighboring slopes (sx and sy).
+ * 
+ * Notes:       Assumes that user specifies dpit in same units as DEM
+ *
+ * Cmd. syntax: pfpitfilldem dem dpit maxiter
+*-----------------------------------------------------------------------*/
+int            PitFillCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Inputs
+   Databox       *dem;
+   char          *dem_hashkey;
+   double         dpit; 
+   int            maxiter;
+
+   // Output
+   Databox       *newdem;
+   char          *filename = "Pit-Filled DEM";
+   char           newdem_hashkey[MAX_KEY_SIZE];
+
+   // Local
+   int            iter;
+   int            nsink;
+   int            i,  j;
+   int            nx, ny, nz;
+   double         x,  y,  z;
+   double         dx, dy, dz;
+
+   /* Check if three arguments following command  */
+   if (argc == 3)
+   {
+      WrongNumArgsError(interp, PFPITFILLDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if (Tcl_GetDouble(interp, argv[2], &dpit) == TCL_ERROR)
+   {
+      NotADoubleError(interp, 1, PFPITFILLDEMUSAGE);
+      return TCL_ERROR;
+   }
+   if (Tcl_GetInt(interp, argv[3], &maxiter) == TCL_ERROR)
+   {
+      NotAnIntError(interp, 1, PFPITFILLDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      nx    = DataboxNx(dem);
+      ny    = DataboxNy(dem);
+      nz    = 1;
+
+      x     = DataboxX(dem);
+      y     = DataboxY(dem);
+      z     = DataboxZ(dem);
+
+      dx    = DataboxDx(dem);
+      dy    = DataboxDy(dem);
+      dz    = DataboxDz(dem);
+
+      /* create the new databox structure for pit-filled dem  */
+      if ( (newdem = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure the data set pointer was added to */
+         /* the hash table successfully.                */
+         if (!AddData(data, newdem, filename, newdem_hashkey))
+            FreeDatabox(newdem);
+         else
+         {
+            Tcl_AppendElement(interp, newdem_hashkey);
+         }
+
+         // Set values of newdem to values of original dem
+         for ( j = 0; j < ny; j++ )
+         {
+            for ( i = 0; i < nx; i++ )
+            { 
+               *DataboxCoeff(newdem,i,j,0) = *DataboxCoeff(dem,i,j,0);
+            }
+         }
+
+         // Iterate to fill pits...
+         iter  = 0;
+         nsink = 9999;
+         while ( (iter < maxiter) && (nsink > 0) )
+         {
+            nsink = ComputePitFill( newdem, dpit );
+            iter  = iter + 1;
+         }
+
+         // Print summary...
+         printf( "*******************************************************\n" );
+         printf( "SUMMARY: pfpitfilldem  \n" );
+         printf( "*******************************************************\n" );
+         printf( "ITERATIONS: \t\t %d \n", iter );
+         printf( "REMAINING SINKS: \t %d \n", nsink );
+         printf( "   \n" );
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+
+   }
+   return TCL_OK;
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfmovingavgdem' command
+ * Description: Iterative moving average routine to fill sinks in DEM
+ *              using average of neighboring cells.
+ *
+ * Notes:       Parameter wsize is given in number of cells 
+ *
+ * Cmd. syntax: pfmovingavgdem dem wsize maxiter
+*-----------------------------------------------------------------------*/
+int            MovingAvgCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Inputs
+   Databox       *dem;
+   char          *dem_hashkey;
+   double         wsize;
+   int            maxiter;
+
+   // Output
+   Databox       *newdem;
+   char          *filename = "Moving-Avg Sink-Filled DEM";
+   char           newdem_hashkey[MAX_KEY_SIZE];
+
+   // Local
+   int            iter;
+   int            nsink;
+   int            i,  j;
+   int            nx, ny, nz;
+   double         x,  y,  z;
+   double         dx, dy, dz;
+
+   /* Check if three arguments following command  */
+   if (argc == 3)
+   {
+      WrongNumArgsError(interp, PFMOVINGAVGDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if (Tcl_GetDouble(interp, argv[2], &wsize) == TCL_ERROR)
+   {
+      NotADoubleError(interp, 1, PFMOVINGAVGDEMUSAGE);
+      return TCL_ERROR;
+   }
+   if (Tcl_GetInt(interp, argv[3], &maxiter) == TCL_ERROR)
+   {
+      NotAnIntError(interp, 1, PFMOVINGAVGDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      nx    = DataboxNx(dem);
+      ny    = DataboxNy(dem);
+      nz    = 1;
+
+      x     = DataboxX(dem);
+      y     = DataboxY(dem);
+      z     = DataboxZ(dem);
+
+      dx    = DataboxDx(dem);
+      dy    = DataboxDy(dem);
+      dz    = DataboxDz(dem);
+
+      /* create the new databox structure for moving avg filled dem  */
+      if ( (newdem = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure the data set pointer was added to */
+         /* the hash table successfully.                */
+         if (!AddData(data, newdem, filename, newdem_hashkey))
+            FreeDatabox(newdem);
+         else
+         {
+            Tcl_AppendElement(interp, newdem_hashkey);
+         }
+
+         // Set values of newdem to values of original dem
+         for ( j = 0; j < ny; j++ )
+         {
+            for ( i = 0; i < nx; i++ )
+            {
+               *DataboxCoeff(newdem,i,j,0) = *DataboxCoeff(dem,i,j,0);
+            }
+         }
+
+         // Iterate to fill pits...
+         iter  = 0;
+         nsink = 9999;
+         while ( (iter < maxiter) && (nsink > 0) )
+         {
+            nsink = ComputeMovingAvg( newdem, wsize );
+            iter  = iter + 1;
+         }
+
+         // Print summary...
+         printf( "*******************************************************\n" );
+         printf( "SUMMARY: pfmovingavgdem  \n" );
+         printf( "*******************************************************\n" );
+         printf( "ITERATIONS: \t\t %d \n", iter );
+         printf( "REMAINING SINKS: \t %d \n", nsink );
+         printf( "   \n" );
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+
+   }
+   return TCL_OK;
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfslopeD8' command
+ * Description: Compute D8 slopes all [i,j]. 
+ *
+ * Notes:       local minima: slope set to zero (no drainage)
+ *              otherwise:    1st order maximum downward slope to lowest
+ *                            neighbor (adjacent or diagonal)
+ *
+ * Cmd. syntax: pfslopeD8 dem
+*-----------------------------------------------------------------------*/
+int            SlopeD8Command(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+
+   // Output
+   Databox       *slope;
+   char           slope_hashkey[MAX_KEY_SIZE];
+   char          *filename = "slope (D8)";
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFSLOPED8USAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for slope values (slope) */
+      if ( (slope = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, slope, filename, slope_hashkey))
+            FreeDatabox(slope);
+         else
+         {
+            Tcl_AppendElement(interp, slope_hashkey);
+         }
+         /* Compute slopex */
+         ComputeSlopeD8(dem,slope);
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+   return TCL_OK;
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfsegmentD8' command
+ * Description: Compute D8 segment lengths for all [i,j].
+ *
+ * Notes:       local minima: segment length set to zero (as for slope)
+ *              otherwise:    segment length is distance between parent and
+ *                            child cell centers
+ *
+ * Cmd. syntax: pfsegmentD8 dem
+*-----------------------------------------------------------------------*/
+int            SegmentD8Command(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+
+   // Output
+   Databox       *ds;
+   char           ds_hashkey[MAX_KEY_SIZE];
+   char          *filename = "ds (D8)";
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFSEGMENTD8USAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for ds values (ds) */
+      if ( (ds = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, ds, filename, ds_hashkey))
+            FreeDatabox(ds);
+         else
+         {
+            Tcl_AppendElement(interp, ds_hashkey);
+         }
+         /* Compute ds */
+         ComputeSegmentD8(dem,ds);
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+   return TCL_OK;
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfchildD8' command
+ * Description: Compute unique D8 childe for all cells; 
+ *              child[i,j] is elevation of cell to which [i,j] drains
+ *              (i.e., elevation of [i,j]'s child)
+ *
+ * Notes:       local minima: child elevation set to own elevation     
+ *
+ * Cmd. syntax: pfchildD8 dem
+*-----------------------------------------------------------------------*/
+int            ChildD8Command(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+
+   // Output
+   Databox       *child;
+   char           child_hashkey[MAX_KEY_SIZE];
+   char          *filename = "child elevation (D8)";
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFCHILDD8USAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for child values (child) */
+      if ( (child = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, child, filename, child_hashkey))
+            FreeDatabox(child);
+         else
+         {
+            Tcl_AppendElement(interp, child_hashkey);
+         }
+         /* Compute child */
+         ComputeChildD8(dem,child);
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+   return TCL_OK;
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfflintslaw' command
+ * Description: Compute DEM elevations using Flint's Law based on user
+ *              provided DEM and parameters (c,p). Computed elevations 
+ *              returned as new databox. 
+ *
+ * Cmd. syntax: pfflintslaw dem c p 
+*-----------------------------------------------------------------------*/
+int            FlintsLawCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+   double         c;
+   double         p; 
+ 
+   // Output
+   Databox       *flint;
+   char           flint_hashkey[MAX_KEY_SIZE];
+   char          *filename = "Flint's Law Elevations"; 
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFFLINTSLAWDEMUSAGE); 
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   if (Tcl_GetDouble(interp, argv[2], &c) == TCL_ERROR)
+   { 
+      NotADoubleError(interp, 1, PFFLINTSLAWDEMUSAGE); 
+      return TCL_ERROR;
+   }
+   
+   if (Tcl_GetDouble(interp, argv[3], &p) == TCL_ERROR)
+   { 
+      NotADoubleError(interp, 1, PFFLINTSLAWDEMUSAGE);
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for flint values (flint) */
+      if ( (flint = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, flint, filename, flint_hashkey))
+            FreeDatabox(flint);
+         else
+         {
+            Tcl_AppendElement(interp, flint_hashkey);
+         }
+         /* Compute elevations */
+         ComputeFlintsLaw(dem,c,p,flint);
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+   return TCL_OK;
+}
+
+
+/*-----------------------------------------------------------------------
+ * routine for `pfflintslawfit' command
+ * Description: Compute DEM elevations using Flint's Law based on user
+ *              provided DEM, with parameters fit based on non-linear 
+ *              least squares minimization (i.e., Flints law is fit to data)
+ *
+ * NOTES:       Fitting uses D8 slopes, D8 child elevations, and bi-directional
+ *              upstream area. 
+ *
+ * Cmd. syntax: pfflintslawfit dem c0 p0 maxiter
+*-----------------------------------------------------------------------*/
+int            FlintsLawFitCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+   double         c, p;
+   int            maxiter;
+
+   // Output
+   Databox       *flint;
+   char           flint_hashkey[MAX_KEY_SIZE];
+   char          *filename = "Flint's Law Elevations";
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFFLINTSLAWFITUSAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   if (Tcl_GetDouble(interp, argv[2], &c) == TCL_ERROR)
+   {
+      NotADoubleError(interp, 1, PFPITFILLDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   if (Tcl_GetDouble(interp, argv[3], &p) == TCL_ERROR)
+   {
+      NotADoubleError(interp, 1, PFPITFILLDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   if (Tcl_GetInt(interp, argv[4], &maxiter) == TCL_ERROR)
+   {
+      NotAnIntError(interp, 1, PFFLINTSLAWDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for flint values (flint) */
+      if ( (flint = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, flint, filename, flint_hashkey))
+            FreeDatabox(flint);
+         else
+         {
+            Tcl_AppendElement(interp, flint_hashkey);
+         }
+         /* Compute elevations */
+         ComputeFlintsLawFit(dem,c,p,maxiter,flint);
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+
+   return TCL_OK;
+
+}
+
+/*-----------------------------------------------------------------------
+ * routine for `pfflintslawbybasin' command
+ * Description: Compute DEM elevations using Flint's Law based on user
+ *              provided DEM, with parameters fit based on non-linear
+ *              least squares minimization (i.e., Flints law is fit to data)
+ *
+ * NOTES:       Fitting uses D8 slopes, D8 child elevations, and bi-directional
+ *              upstream area.
+ *              Flint's Law is fit for each basin separately...
+ *              This is the only difference w/ FlintsLawFitCommand
+ *
+ * Cmd. syntax: pfflintslawbybasin dem c0 p0 maxiter
+*-----------------------------------------------------------------------*/
+int            FlintsLawByBasinCommand(
+   ClientData     clientData,
+   Tcl_Interp    *interp,
+   int            argc,
+   char          *argv[])
+{
+   Tcl_HashEntry *entryPtr;   // Points to new hash table entry
+   Data          *data = (Data *)clientData;
+
+   // Input
+   Databox       *dem;
+   char          *dem_hashkey;
+   double         c, p;
+   int            maxiter;
+
+   // Output
+   Databox       *flint;
+   char           flint_hashkey[MAX_KEY_SIZE];
+   char          *filename = "Flint's Law Elevations";
+
+   /* Check if one argument following command  */
+   if (argc == 1)
+   {
+      WrongNumArgsError(interp, PFFLINTSLAWFITUSAGE);
+      return TCL_ERROR;
+   }
+
+   dem_hashkey = argv[1];
+
+   if ((dem = DataMember(data, dem_hashkey, entryPtr)) == NULL)
+   {
+      SetNonExistantError(interp,dem_hashkey);
+      return TCL_ERROR;
+   }
+
+   if (Tcl_GetDouble(interp, argv[2], &c) == TCL_ERROR)
+   {
+      NotADoubleError(interp, 1, PFPITFILLDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   if (Tcl_GetDouble(interp, argv[3], &p) == TCL_ERROR)
+   {
+      NotADoubleError(interp, 1, PFPITFILLDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   if (Tcl_GetInt(interp, argv[4], &maxiter) == TCL_ERROR)
+   {
+      NotAnIntError(interp, 1, PFFLINTSLAWDEMUSAGE);
+      return TCL_ERROR;
+   }
+
+   {
+      int nx    = DataboxNx(dem);
+      int ny    = DataboxNy(dem);
+      int nz    = 1;
+
+      double x  = DataboxX(dem);
+      double y  = DataboxY(dem);
+      double z  = DataboxZ(dem);
+
+      double dx = DataboxDx(dem);
+      double dy = DataboxDy(dem);
+      double dz = DataboxDz(dem);
+
+      /* create the new databox structure for flint values (flint) */
+      if ( (flint = NewDatabox(nx, ny, nz, x, y, z, dx, dy, dz)) )
+      {
+         /* Make sure dataset pointer was added to hash table   */
+         if (!AddData(data, flint, filename, flint_hashkey))
+            FreeDatabox(flint);
+         else
+         {
+            Tcl_AppendElement(interp, flint_hashkey);
+         }
+         /* Compute elevations */
+         ComputeFlintsLawByBasin(dem,c,p,maxiter,flint);
+      }
+      else
+      {
+         ReadWriteError(interp);
+         return TCL_ERROR;
+      }
+   }
+
+   return TCL_OK;
+
 }
 

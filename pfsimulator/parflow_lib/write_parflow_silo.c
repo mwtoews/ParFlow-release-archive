@@ -33,15 +33,17 @@
 
 #include "parflow.h"
 
-#include <sys/stat.h>
-
 #ifdef HAVE_SILO
 #include "silo.h"
 #endif
 
+#include <string.h>
 #include <math.h>
 
-#include "parflow.h"
+// SGS FIXME for C++
+#include <sys/stat.h>
+
+amps_ThreadLocalDcl(int , s_parflow_silo_filetype);
 
 #ifdef HAVE_SILO
 void       WriteSilo_Subvector(DBfile *db_file, Subvector *subvector, Subgrid   *subgrid, 
@@ -152,19 +154,7 @@ void       WriteSilo_Subvector(DBfile *db_file, Subvector *subvector, Subgrid   
 }
 #endif
 
-/*
-  Silo file writing uses a directory to store files.  This directory
-  needs to be created somewhere so an Init step is required.
- */
-void     WriteSiloInit(char    *file_prefix)
-{
-   char            filename[512];
-
-#ifdef HAVE_SILO
-   int p = amps_Rank(amps_CommWorld);
-   if ( p == 0 )
-   {
-      sprintf(filename, "%s", file_prefix);
+void pf_mk_dir(char* filename) {
       struct stat status;
       int err = stat(filename, &status); 	
       if( err == -1 ) {
@@ -177,10 +167,117 @@ void     WriteSiloInit(char    *file_prefix)
 	 amps_Printf("Error: can't create directory for silo files %s, file exists with that name\n", filename);
 	 exit(1);
       }
+}
+
+/*
+  Silo file writing uses a directory to store files.  This directory
+  needs to be created somewhere so an Init step is required.
+ */
+void     WriteSiloInit(char    *file_prefix)
+{
+   char            filename[2048];
+
+#ifdef HAVE_SILO
+   int p = amps_Rank(amps_CommWorld);
+   int P = amps_Size(amps_CommWorld);
+   int i;
+   int j;
+
+   int err;
+
+   char           key[IDB_MAX_KEY_LEN];
+
+   /* 
+      Get compression options for SILO files
+   */
+   
+   sprintf(key, "SILO.CompressionOptions");
+   char *compression_options = GetStringDefault(key, "");
+   if(strlen(compression_options)) {
+      DBSetCompression(compression_options);
+      if(err < 0) {
+	 amps_Printf("Error: Compression options failed for SILO.CompressionOptions=%s\n", compression_options);
+	 amps_Printf("       This may mean SILO was not compiled with compression enabled\n");
+	 exit(1);
+      }
+   }
+
+   sprintf(key, "SILO.Filetype");
+   char *switch_name = GetStringDefault(key, "PDB");
+   NameArray type_na = NA_NewNameArray("PDB HDF5");
+
+   switch (NA_NameToIndex(type_na, switch_name)) {
+      case 0:
+	 s_parflow_silo_filetype = DB_PDB;
+	 break;
+      case 1:
+	 s_parflow_silo_filetype = DB_HDF5;
+	 break;
+      default:
+	 amps_Printf("Error: invalid SILO.Filetype %s\n", switch_name);
+	 exit(1);
+	 break;
+   }
+
+   NA_FreeNameArray(type_na);
+
+   if ( p == 0 )
+   {
+      sprintf(filename, "%s", file_prefix);
+      pf_mk_dir(filename);
+      /*
+	SGS This is very hacky
+      */
+      char* output_types[] = {"perm_x",
+			      "perm_y",
+			      "perm_z",
+			      "porosity",
+			      "satur",
+			      "concen",
+			      "press",
+			      "slope_x",
+			      "slope_y",
+			      "mannings",
+			      "specific_storage",
+			      "mask",
+			      "eflx_lh_tot",
+			      "eflx_lwrad_out",
+			      "eflx_sh_tot",
+			      "eflx_soil_grnd",
+			      "qflx_evap_tot",
+			      "qflx_evap_grnd",
+			      "qflx_evap_soi",
+			      "qflx_evap_veg",
+			      "qflx_tran_veg",
+			      "qflx_infl",
+			      "swe_out",
+			      "t_grnd",
+			      "t_soil",
+			      "qflx_qirr",
+			      "qflx_qirr_inst",
+			      "evaptrans",
+			      "evaptranssum",
+			      "overlandsum",
+                              "overland_bc_flux",
+                              "press_pre_clm",
+                              "press_post_clm"
+      };
+
+      for(i = 0; i < 31+2; i++) {
+	 sprintf(filename, "%s/%s", file_prefix, output_types[i]);
+	 pf_mk_dir(filename);
+
+	 for(j = 0; j < P; j++) {
+	    sprintf(filename, "%s/%s/%06u", file_prefix, output_types[i], j);
+	    pf_mk_dir(filename);
+	 }
+      }
+      
    }
 
 #endif
 }
+
 
 /*
   Write a Vector to a Silo file.
@@ -189,8 +286,13 @@ void     WriteSiloInit(char    *file_prefix)
   Silo files can store additinal metadata such as name of variable,
   simulation time etc.  These should be added.
  */
-void     WriteSilo(char    *file_prefix, char    *file_suffix, Vector  *v, 
-double time, int step, char *variable_name)
+void     WriteSilo(char    *file_prefix, 
+		   char    *file_type, 
+		   char    *file_suffix, 
+		   Vector  *v, 
+		   double time, 
+		   int step, 
+		   char *variable_name)
 {
    Grid           *grid     = VectorGrid(v);
    SubgridArray   *subgrids = GridSubgrids(grid);
@@ -212,6 +314,8 @@ double time, int step, char *variable_name)
    BeginTiming(PFBTimingIndex);
 
 #ifdef HAVE_SILO
+
+
    p = amps_Rank(amps_CommWorld);
    P = amps_Size(amps_CommWorld);
    if ( p == 0 )
@@ -233,23 +337,36 @@ double time, int step, char *variable_name)
       vartypes = ctalloc(int, P);
       
       for(i = 0; i < P; i++) {
-	 char *name = ctalloc(char, 512);
-	 sprintf(name, "%s/%s.%06u.%s:mesh_%06u", file_prefix, file_suffix, i, file_extn, i);
+	 char *name = ctalloc(char, 2048);
+	 if(strlen(file_suffix)) {
+	    sprintf(name, "%s/%s/%06u/data.%s.%s:mesh_%06u", file_prefix, file_type, i, file_suffix, file_extn, i);
+	 } else {
+	    sprintf(name, "%s/%s/%06u/data.%s:mesh_%06u", file_prefix, file_type, i, file_extn, i);
+	 }
 	 meshnames[i] = name;
 	 meshtypes[i] = DB_QUADMESH;
 
-	 name = ctalloc(char, 512);
-	 sprintf(name, "%s/%s.%06u.%s:%s_%06u", file_prefix, file_suffix, i, file_extn, 
-	         variable_name,i);
+	 name = ctalloc(char, 2048);
+	 if(strlen(file_suffix)) {
+	    sprintf(name, "%s/%s/%06u/data.%s.%s:%s_%06u", file_prefix, file_type, i, file_suffix, file_extn, 
+		    variable_name,i);
+	 } else {
+	    sprintf(name, "%s/%s/%06u/data.%s:%s_%06u", file_prefix, file_type, i, file_extn, 
+		    variable_name,i);
+	 }
 	 varnames[i] = name;
 	 vartypes[i] = DB_QUADVAR;
       }
       
       /* open file */
-      sprintf(filename, "%s.%s.%s", file_prefix, file_suffix, file_extn);
+      if(strlen(file_suffix)) {
+	 sprintf(filename, "%s.%s.%s.%s", file_prefix, file_type, file_suffix, file_extn);
+      } else {
+	 sprintf(filename, "%s.%s.%s", file_prefix, file_type, file_extn);
+      }
       
       /* TODO SGS what type? HDF PDB? */
-      db_file = DBCreate(filename, DB_CLOBBER, DB_LOCAL, NULL, DB_PDB);
+      db_file = DBCreate(filename, DB_CLOBBER, DB_LOCAL, NULL, s_parflow_silo_filetype);
       
       if (db_file == NULL) {
 	 amps_Printf("Error: can't open silo file %s\n", filename);
@@ -333,9 +450,14 @@ double time, int step, char *variable_name)
       free(vartypes);
    }
 
-   sprintf(filename, "%s/%s.%06u.%s", file_prefix, file_suffix, p, file_extn);
+   if(strlen(file_suffix)) {
+      sprintf(filename, "%s/%s/%06u/data.%s.%s", file_prefix, file_type, p, file_suffix, file_extn);
+   } else {
+      sprintf(filename, "%s/%s/%06u/data.%s", file_prefix, file_type, p, file_extn);
+   }
+
    /* TODO SGS what type? HDF PDB? */
-   db_file = DBCreate(filename, DB_CLOBBER, DB_LOCAL, NULL, DB_PDB);
+   db_file = DBCreate(filename, DB_CLOBBER, DB_LOCAL, NULL, s_parflow_silo_filetype);
    if ( db_file == NULL ) {      
       amps_Printf("Error: can't open silo file %s\n", filename);
    }

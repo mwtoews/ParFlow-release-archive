@@ -42,7 +42,7 @@ typedef struct
 
 typedef struct
 {
-   Grid   *grid;
+   Grid   *grid2d;
    double *temp_data;
 } InstanceXtra;
 
@@ -76,17 +76,17 @@ void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
 
-   Grid             *grid = VectorGrid(dummy);
+   Grid             *grid2d = VectorGrid(mann);
 
    GrGeomSolid      *gr_solid, *gr_domain;
 
-   CommHandle       *handle;
+   VectorUpdateCommHandle       *handle;
 
    Type0            *dummy0;
    Type1            *dummy1;
    Type2            *dummy2;
 
-   SubgridArray     *subgrids = GridSubgrids(grid);
+   SubgridArray     *subgrids = GridSubgrids(grid2d);
 
    Subgrid          *subgrid;
    Subvector        *ps_sub;
@@ -101,6 +101,8 @@ void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
 
    int               is, i, j, k, ips, ipicv;
    double            time=0.0;
+
+   (void)dummy;
 
     /*-----------------------------------------------------------------------
     * Put in any user defined mannings 
@@ -342,7 +344,7 @@ void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
  *--------------------------------------------------------------------------*/
 
 PFModule  *ManningsInitInstanceXtra(
-   Grid    *grid)
+   Grid    *grid2d)
 {
    PFModule      *this_module   = ThisPFModule;
    PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
@@ -355,15 +357,16 @@ PFModule  *ManningsInitInstanceXtra(
    else
       instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
 
-   if (grid != NULL)
+   if (grid2d != NULL)
    {
-	   (instance_xtra -> grid) = grid;
+	   (instance_xtra -> grid2d) = grid2d;
 
    if (public_xtra -> type == 2)
    {
 	   dummy2 = (Type2 *)(public_xtra -> data);
 
-	   dummy2 -> m_values = NewVector(grid, 1, 1);
+	   dummy2 -> m_values = NewVectorType(grid2d, 1, 1,
+					      vector_cell_centered_2D);
 
 	   ReadPFBinary((dummy2 -> filename),(dummy2 -> m_values));
    

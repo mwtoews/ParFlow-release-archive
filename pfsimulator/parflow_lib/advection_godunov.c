@@ -131,7 +131,7 @@ void     Godunov(
     Vector           *perm_y    = ProblemDataPermeabilityY(problem_data); 
     Vector           *perm_z    = ProblemDataPermeabilityZ(problem_data); 
 
-    CommHandle       *handle = NULL;
+    VectorUpdateCommHandle       *handle = NULL;
 
     SubgridArray     *subgrids;
     SubregionArray   *subregion_array;
@@ -196,8 +196,9 @@ void     Godunov(
    /*-----------------------------------------------------------------------
     * Allocate temp vectors
     *-----------------------------------------------------------------------*/
-    scale           = NewVector(instance_xtra -> grid, 1, 2);
-    right_hand_side = NewVector(instance_xtra -> grid, 1, 2);
+
+    scale           = NewVectorType(instance_xtra -> grid, 1, 2, vector_cell_centered);
+    right_hand_side = NewVectorType(instance_xtra -> grid, 1, 2, vector_cell_centered);
 
    /*-----------------------------------------------------------------------
     * Initialize some data
@@ -596,7 +597,7 @@ void     Godunov(
 		area_x = dy*dz;
 		area_y = dx*dz;
 		area_z = dx*dy;
-		area_sum = area_x * area_y + area_z;
+		area_sum = area_x + area_y + area_z;
 
                 rhs  = SubvectorElt(subvector_rhs,   ix  ,iy  ,iz  );
                 scal = SubvectorElt(subvector_scal,  ix  ,iy  ,iz  );

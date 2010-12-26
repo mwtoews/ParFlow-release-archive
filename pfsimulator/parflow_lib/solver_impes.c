@@ -200,8 +200,9 @@ void      SolverImpes()
 
    int           iteration_number = 0, number_logged, file_number, dump_index;
    int           indx, phase, concen;
-   int           transient, recompute_pressure, still_evolving, 
-                 any_file_dumped;
+   int           transient, recompute_pressure, still_evolving; 
+   int           any_file_dumped;
+   int           pressure_file_dumped;
    int           dump_files, evolve_saturations, evolve_concentrations;
    int           is_multiphase;
 
@@ -211,10 +212,10 @@ void      SolverImpes()
    double        phase_maximum, total_maximum;
    double        dtmp, *phase_densities;
 
-   CommHandle   *handle;
+   VectorUpdateCommHandle   *handle;
 
    char          dt_info;
-   char          file_prefix[64], file_postfix[64];
+   char          file_prefix[2048], file_type[2048], file_postfix[2048];
 
    double       *time_log = NULL, *dt_log = NULL;
    int          *seq_log = NULL,  *dumped_log = NULL;
@@ -229,12 +230,12 @@ void      SolverImpes()
     *-------------------------------------------------------------------*/
    if ( is_multiphase )
    {
-      temp_mobility_x = NewVector(instance_xtra -> grid, 1, 1);
-      temp_mobility_y = NewVector(instance_xtra -> grid, 1, 1);
-      temp_mobility_z = NewVector(instance_xtra -> grid, 1, 1);
-      stemp           = NewVector(instance_xtra -> grid, 1, 3);
+      temp_mobility_x = NewVectorType(instance_xtra -> grid, 1, 1, vector_cell_centered );
+      temp_mobility_y = NewVectorType(instance_xtra -> grid, 1, 1, vector_cell_centered );
+      temp_mobility_z = NewVectorType(instance_xtra -> grid, 1, 1, vector_cell_centered );
+      stemp           = NewVectorType(instance_xtra -> grid, 1, 3, vector_cell_centered );
    }
-   ctemp              = NewVector(instance_xtra -> grid, 1, 3);
+   ctemp              = NewVectorType(instance_xtra -> grid, 1, 3,  vector_cell_centered );
 
 
    IfLogging(1)
@@ -248,7 +249,7 @@ void      SolverImpes()
       number_logged = 0;
    }
 
-   sprintf(file_prefix, GlobalsOutFileName);
+   sprintf(file_prefix, "%s", GlobalsOutFileName);
 
    /* do turning bands (and other stuff maybe) */
    PFModuleInvokeType(SetProblemDataInvoke, set_problem_data, (problem_data));
@@ -285,20 +286,21 @@ void      SolverImpes()
 
    if ( public_xtra -> write_silo_subsurf_data )
    {
-      sprintf(file_postfix, "perm_x");
-      WriteSilo(file_prefix, file_postfix, ProblemDataPermeabilityX(problem_data),
+      sprintf(file_postfix, "");
+      sprintf(file_type, "perm_x");
+      WriteSilo(file_prefix, file_type, file_postfix, ProblemDataPermeabilityX(problem_data),
                 t, 0, "PermeabilityX");
 
-      sprintf(file_postfix, "perm_y");
-      WriteSilo(file_prefix, file_postfix, ProblemDataPermeabilityY(problem_data),
+      sprintf(file_type, "perm_y");
+      WriteSilo(file_prefix, file_type, file_postfix, ProblemDataPermeabilityY(problem_data),
                 t, 0, "PermeabilityY");
 
-      sprintf(file_postfix, "perm_z");
-      WriteSilo(file_prefix, file_postfix, ProblemDataPermeabilityZ(problem_data),
+      sprintf(file_type, "perm_z");
+      WriteSilo(file_prefix, file_type, file_postfix, ProblemDataPermeabilityZ(problem_data),
                 t, 0, "PermeabilityZ");
 
-      sprintf(file_postfix, "porosity");
-      WriteSilo(file_prefix, file_postfix, ProblemDataPorosity(problem_data),
+      sprintf(file_type, "porosity");
+      WriteSilo(file_prefix, file_type, file_postfix, ProblemDataPorosity(problem_data),
 	        t, 0, "Porosity");
 
    }
@@ -327,16 +329,16 @@ void      SolverImpes()
       evolve_concentrations = 1;
    }
 
-   pressure = NewVector( grid, 1, 1 );
+   pressure = NewVectorType( grid, 1, 1, vector_cell_centered );
    InitVectorAll(pressure, 0.0);
 
-   total_mobility_x = NewVector( grid, 1, 1 );
+   total_mobility_x = NewVectorType( grid, 1, 1, vector_cell_centered );
    InitVectorAll(total_mobility_x, 0.0);
 
-   total_mobility_y = NewVector( grid, 1, 1 );
+   total_mobility_y = NewVectorType( grid, 1, 1, vector_cell_centered );
    InitVectorAll(total_mobility_y, 0.0);
 
-   total_mobility_z = NewVector( grid, 1, 1 );
+   total_mobility_z = NewVectorType( grid, 1, 1, vector_cell_centered );
    InitVectorAll(total_mobility_z, 0.0);
 
    /*-------------------------------------------------------------------
@@ -349,7 +351,7 @@ void      SolverImpes()
    {
       for(phase = 0; phase < ProblemNumPhases(problem)-1; phase++)
       {
-         saturations[phase] = NewVector( grid, 1, 3 );
+         saturations[phase] = NewVectorType( grid, 1, 3, vector_cell_centered );
          InitVectorAll(saturations[phase], 0.0);
 
          PFModuleInvokeType(ICPhaseSaturInvoke, ic_phase_satur,
@@ -361,7 +363,7 @@ void      SolverImpes()
          FinalizeVectorUpdate(handle);
       }
 
-      saturations[ProblemNumPhases(problem)-1] = NewVector( grid, 1, 3 );
+      saturations[ProblemNumPhases(problem)-1] = NewVectorType( grid, 1, 3, vector_cell_centered );
       InitVectorAll(saturations[ProblemNumPhases(problem)-1], 0.0);
 
       PFModuleInvokeType(SaturationConstitutiveInvoke, constitutive, (saturations));
@@ -408,7 +410,7 @@ void      SolverImpes()
 
          if ( ProblemNumContaminants(problem) > 0 )
          {
-            solidmassfactor = NewVector( grid, 1, 2);
+            solidmassfactor = NewVectorType( grid, 1, 2, vector_cell_centered);
 
             /*----------------------------------------------------------------
              * Allocate and set up initial concentrations
@@ -422,7 +424,7 @@ void      SolverImpes()
             {
                for(concen = 0; concen < ProblemNumContaminants(problem); concen++)
                {
-                  concentrations[indx] = NewVector( grid, 1, 3 );
+                  concentrations[indx] = NewVectorType( grid, 1, 3, vector_cell_centered );
                   InitVectorAll(concentrations[indx], 0.0);
 
                   PFModuleInvokeType(ICPhaseConcenInvoke, ic_phase_concen,
@@ -442,21 +444,21 @@ void      SolverImpes()
          phase_x_velocity = ctalloc(Vector *, ProblemNumPhases(problem) );
          for(phase = 0; phase < ProblemNumPhases(problem); phase++)
          {
-            phase_x_velocity[phase] = NewVector( x_grid, 1, 1 );
+            phase_x_velocity[phase] = NewVectorType( x_grid, 1, 1, vector_side_centered_x);
             InitVectorAll(phase_x_velocity[phase], 0.0);
          }
 
          phase_y_velocity = ctalloc(Vector *, ProblemNumPhases(problem) );
          for(phase = 0; phase < ProblemNumPhases(problem); phase++)
          {
-            phase_y_velocity[phase] = NewVector( y_grid, 1, 1 );
+            phase_y_velocity[phase] = NewVectorType( y_grid, 1, 1, vector_side_centered_y);
             InitVectorAll(phase_y_velocity[phase], 0.0);
          }
 
          phase_z_velocity = ctalloc(Vector *, ProblemNumPhases(problem) );
          for(phase = 0; phase < ProblemNumPhases(problem); phase++)
          {
-            phase_z_velocity[phase] = NewVector( z_grid, 1, 2 );
+            phase_z_velocity[phase] = NewVectorType( z_grid, 1, 2, vector_side_centered_z);
             InitVectorAll(phase_z_velocity[phase], 0.0);
          }
 
@@ -464,19 +466,19 @@ void      SolverImpes()
 
 	 if ( is_multiphase )
 	 {
-	    total_x_velocity = NewVector( x_grid, 1, 1 );
+	    total_x_velocity = NewVectorType( x_grid, 1, 1, vector_side_centered_x );
             InitVectorAll(total_x_velocity, 0.0);
 
-            total_y_velocity = NewVector( y_grid, 1, 1 );
+            total_y_velocity = NewVectorType( y_grid, 1, 1, vector_side_centered_y );
             InitVectorAll(total_y_velocity, 0.0);
 
-            total_z_velocity = NewVector( z_grid, 1, 2 );
+            total_z_velocity = NewVectorType( z_grid, 1, 2, vector_side_centered_z );
             InitVectorAll(total_z_velocity, 0.0);
 
          /*----------------------------------------------------------------
           * Allocate and set up edge permeabilities
           *----------------------------------------------------------------*/
-            z_permeability = NewVector( z_grid, 1, 2 );
+            z_permeability = NewVectorType( z_grid, 1, 2, vector_side_centered_z );
             InitVectorAll(z_permeability, 0.0);
 
             PFModuleInvokeType(PermeabilityFaceInvoke, permeability_face,
@@ -508,7 +510,9 @@ void      SolverImpes()
 
 	       if ( public_xtra -> write_silo_satur )
 	       {
-		  WriteSilo(file_prefix, file_postfix, saturations[phase], 
+		  sprintf(file_postfix, "%01d", phase );
+		  sprintf(file_type, "satur");
+		  WriteSilo(file_prefix, file_type, file_postfix, saturations[phase], 
 			    t, file_number, "Saturation");
 		  any_file_dumped = 1;
 	       }
@@ -540,7 +544,9 @@ void      SolverImpes()
 
 		     if ( public_xtra -> write_silo_concen ) 
 		     {
-			WriteSilo(file_prefix, file_postfix, concentrations[indx],
+			sprintf(file_postfix, "%01d.%02d", phase, concen);
+			sprintf(file_type, "concen");
+			WriteSilo(file_prefix, file_type, file_postfix, concentrations[indx],
 				  t, file_number, "Concentration");
 			any_file_dumped = 1;
 		     }
@@ -568,13 +574,26 @@ void      SolverImpes()
           * Log this step
           *----------------------------------------------------------------*/
 
+	 /* 
+	    If printing pressure need to increment the file number even.
+	    The file I/O will actually occur below after pressure is
+	    calculated and written to file_number - 1.
+	    Know that we will compute an initial pressure so will dump 
+	    output for initial step.
+	  */
+
+	 if ( print_press )
+	 {
+	    pressure_file_dumped = 1;
+	 }
+
          IfLogging(1)
          {
             seq_log[number_logged]       = iteration_number;
             time_log[number_logged]      = t;
             dt_log[number_logged]        = dt;
             dt_info_log[number_logged]   = 'i';
-            if ( any_file_dumped )
+            if ( any_file_dumped || pressure_file_dumped)
                dumped_log[number_logged] = file_number;
             else
                dumped_log[number_logged] = -1;
@@ -585,7 +604,12 @@ void      SolverImpes()
             number_logged++;
          }
 
-         if ( any_file_dumped ) file_number++;
+         if ( any_file_dumped || pressure_file_dumped) {
+	    file_number++;
+	 }	 
+
+	 pressure_file_dumped = 0;
+	 any_file_dumped = 0;
       }
    }
    else
@@ -764,14 +788,24 @@ void      SolverImpes()
             {
                sprintf(file_postfix, "press.%05d", file_number - 1);
                WritePFBinary(file_prefix, file_postfix, pressure);
+	       IfLogging(1)
+	       {
+		  dumped_log[number_logged-1] = file_number-1;
+	       }
+	       pressure_file_dumped = 1;
             }
 
 	    if(public_xtra -> write_silo_press) 
 	    {
-	       sprintf(file_postfix, "press.%05d", file_number - 1);
-	       WriteSilo(file_prefix, file_postfix, pressure,
+	       sprintf(file_postfix, "%05d", file_number - 1);
+	       sprintf(file_postfix, "press");
+	       WriteSilo(file_prefix, file_type, file_postfix, pressure,
 			 t, file_number - 1, "Pressure");
-	       any_file_dumped = 1;
+	       IfLogging(1)
+	       {
+		  dumped_log[number_logged-1] = file_number-1;
+	       }
+	       pressure_file_dumped = 1;
 	    }
 
 
@@ -787,6 +821,12 @@ void      SolverImpes()
 
                  sprintf(file_postfix, "phasez.%01d.%05d", phase, file_number - 1);
                  WritePFBinary(file_prefix, file_postfix, phase_z_velocity[phase]);
+
+		 IfLogging(1)
+		 {
+		    dumped_log[number_logged-1] = file_number-1;
+		 }
+		 pressure_file_dumped = 1;
                }
 
                if ( is_multiphase )
@@ -799,6 +839,11 @@ void      SolverImpes()
 
                   sprintf(file_postfix, "totalz.%05d", file_number - 1);
                   WritePFBinary(file_prefix, file_postfix, total_z_velocity);
+		  IfLogging(1)
+		  {
+		     dumped_log[number_logged-1] = file_number-1;
+		  }
+		  pressure_file_dumped = 1;
                }
             }
          }
@@ -843,7 +888,7 @@ void      SolverImpes()
          {
 	    if ( is_multiphase )
 	    {
-	       dt = min(total_dt, min_phase_dt);
+	       dt = pfmin(total_dt, min_phase_dt);
 	    }
             else
 	    {
@@ -1005,8 +1050,6 @@ void      SolverImpes()
             t += dt;
          }
 
-         any_file_dumped = 0;
-
          /******************************************************************/
          /*         Solve for and print the saturations                    */
          /******************************************************************/
@@ -1053,11 +1096,11 @@ void      SolverImpes()
                {
                   for(phase = 0; phase < ProblemNumPhases(problem); phase++)
                   {
-		     sprintf(file_postfix, "satur.%01d.%05d", phase, 
-			     file_number );
 
 		     if ( print_satur )
 		     {
+			sprintf(file_postfix, "satur.%01d.%05d", phase, 
+				file_number );
 			WritePFBinary(file_prefix, file_postfix,
 				      saturations[phase] );
 			any_file_dumped = 1;
@@ -1065,7 +1108,11 @@ void      SolverImpes()
 
 		     if( public_xtra -> write_silo_satur )
 		     {
-			WriteSilo(file_prefix, file_postfix, saturations[phase], 
+			sprintf(file_postfix, "%01d.%05d", phase, 
+				file_number );
+			sprintf(file_type, "satur");
+
+			WriteSilo(file_prefix, file_type, file_postfix, saturations[phase], 
 				  t, file_number, "Saturation");
 			any_file_dumped = 1;
 		     }
@@ -1123,8 +1170,8 @@ void      SolverImpes()
                   {
                      for(concen = 0; concen < ProblemNumContaminants(problem); concen++)
                      {
-                        sprintf(file_postfix, "concen.%01d.%02d.%05d", phase, concen, file_number);
 			if ( print_concen ) { 
+			   sprintf(file_postfix, "concen.%01d.%02d.%05d", phase, concen, file_number);
 			   WritePFSBinary(file_prefix, file_postfix, 
 					  concentrations[indx], drop_tol);
 			   any_file_dumped = 1;
@@ -1132,7 +1179,9 @@ void      SolverImpes()
 
 			if ( public_xtra -> write_silo_concen )
 			{
-			   WriteSilo(file_prefix, file_postfix, concentrations[indx], 
+			   sprintf(file_postfix, "%01d.%02d.%05d", phase, concen, file_number);
+			   sprintf(file_type, "concen");
+			   WriteSilo(file_prefix, file_type, file_postfix, concentrations[indx], 
 				     t, file_number, "Concentration");
 			   any_file_dumped = 1;
 			}
@@ -1172,7 +1221,7 @@ void      SolverImpes()
             time_log[number_logged]      = t;
             dt_log[number_logged]        = dt;
             dt_info_log[number_logged]   = dt_info;
-            if ( any_file_dumped )
+            if ( any_file_dumped)
                dumped_log[number_logged] = file_number;
             else
                dumped_log[number_logged] = -1;
@@ -1183,7 +1232,12 @@ void      SolverImpes()
             number_logged++;
          }
 
-         if ( any_file_dumped ) file_number++;
+         if ( any_file_dumped || pressure_file_dumped) {
+	    file_number++;
+	 }
+
+	 any_file_dumped = 0;
+	 pressure_file_dumped = 0;
 
       }
       else
@@ -1196,8 +1250,9 @@ void      SolverImpes()
 
 	 if(public_xtra -> write_silo_press) 
 	 {
-            sprintf(file_postfix, "press" );
-	    WriteSilo(file_prefix, file_postfix, pressure,
+            sprintf(file_postfix, "" );
+            sprintf(file_type, "press" );
+	    WriteSilo(file_prefix, file_type, file_postfix, pressure,
 		      t, file_number, "Pressure");
 	 }
       }
@@ -1219,24 +1274,28 @@ void      SolverImpes()
       
       if(public_xtra -> write_silo_press) 
       {
-	 sprintf(file_postfix, "press.%05d", file_number);
-	 WriteSilo(file_prefix, file_postfix, pressure,
+	 sprintf(file_postfix, "%05d", file_number);
+	 sprintf(file_type, "press");
+	 WriteSilo(file_prefix, file_type, file_postfix, pressure,
 		   t, file_number, "Pressure");
 	 any_file_dumped = 1;
       }
 
       for(phase = 0; phase < ProblemNumPhases(problem); phase++)
       {
-	 sprintf(file_postfix, "satur.%01d.%05d", phase, file_number );
+
 	 if ( print_satur )
 	 {
+	    sprintf(file_postfix, "satur.%01d.%05d", phase, file_number );
 	    WritePFBinary(file_prefix, file_postfix, saturations[phase] );
 		  any_file_dumped = 1;
 	 }
 
 	 if ( public_xtra -> write_silo_satur )
 	 {
-	    WriteSilo(file_prefix, file_postfix, saturations[phase], 
+	    sprintf(file_postfix, "%01d.%05d", phase, file_number );
+	    sprintf(file_type, "satur");
+	    WriteSilo(file_prefix, file_type, file_postfix, saturations[phase], 
 		      t, file_number, "Saturation");
 	    any_file_dumped = 1;
 	 }
@@ -1251,9 +1310,10 @@ void      SolverImpes()
 	    for(concen = 0; concen < ProblemNumContaminants(problem); concen++)
 	    {
 	       
-	       sprintf(file_postfix, "concen.%01d.%02d.%05d", phase, concen, file_number);
+
 	       if ( print_concen ) 
 	       {
+		  sprintf(file_postfix, "concen.%01d.%02d.%05d", phase, concen, file_number);
 		  WritePFSBinary(file_prefix, file_postfix, 
 				 concentrations[indx], drop_tol);
 		  
@@ -1262,7 +1322,9 @@ void      SolverImpes()
 	       
 	       if ( public_xtra -> write_silo_concen ) 
 	       {
-		  WriteSilo(file_prefix, file_postfix, concentrations[indx],
+		  sprintf(file_postfix, "%01d.%02d.%05d", phase, concen, file_number);
+		  sprintf(file_type, "concen");
+		  WriteSilo(file_prefix, file_type, file_postfix, concentrations[indx],
 			    t, file_number, "Concentration");
 		  any_file_dumped = 1;
 	       }
@@ -1466,6 +1528,9 @@ PFModule *SolverImpesInitInstanceXtra()
    new_subgrids  = GetGridSubgrids(new_all_subgrids);
    grid2d        = NewGrid(new_subgrids, new_all_subgrids);
    CreateComputePkgs(grid2d);
+
+   // SGS Debug
+   globals -> grid2d = grid2d;
  
    /* Create the x velocity grid */
 
@@ -1664,33 +1729,33 @@ PFModule *SolverImpesInitInstanceXtra()
 
    /* compute size for pressure solve */
    sz = 0;
-   sz = max(sz, 
+   sz = pfmax(sz, 
 	    PFModuleSizeOfTempData(instance_xtra -> discretize_pressure));
-   sz = max(sz, PFModuleSizeOfTempData(instance_xtra -> linear_solver));
+   sz = pfmax(sz, PFModuleSizeOfTempData(instance_xtra -> linear_solver));
    pressure_sz = sz;
 
    /* compute size for velocity computation */
    sz = 0;
-   sz = max(sz, 
+   sz = pfmax(sz, 
 	    PFModuleSizeOfTempData(instance_xtra -> phase_velocity_face));
    if ( is_multiphase )
    {
-      sz = max(sz, 
+      sz = pfmax(sz, 
 	       PFModuleSizeOfTempData(instance_xtra -> total_velocity_face));
    }
    velocity_sz = sz;
 
    /* compute size for concentration advection */
    sz = 0;
-   sz = max(sz, PFModuleSizeOfTempData(instance_xtra -> retardation));
-   sz = max(sz, PFModuleSizeOfTempData(instance_xtra -> advect_concen));
+   sz = pfmax(sz, PFModuleSizeOfTempData(instance_xtra -> retardation));
+   sz = pfmax(sz, PFModuleSizeOfTempData(instance_xtra -> advect_concen));
    concen_sz = sz;
 
    /* set temp_data size to max of pressure_sz, satur_sz, and concen_sz*/
-   temp_data_size = max(max(pressure_sz, velocity_sz), concen_sz);
+   temp_data_size = pfmax(pfmax(pressure_sz, velocity_sz), concen_sz);
    if ( is_multiphase )
    {
-      temp_data_size = max(temp_data_size,max(total_mobility_sz, satur_sz));
+      temp_data_size = pfmax(temp_data_size,pfmax(total_mobility_sz, satur_sz));
    }
 /*     temp_data_size = total_mobility_sz + pressure_sz + velocity_sz 
  *                      + satur_sz + concen_sz;  */
@@ -1744,7 +1809,7 @@ PFModule *SolverImpesInitInstanceXtra()
    PFModuleReNewInstanceType(AdvectionConcentrationInitInstanceXtraType,
 			     (instance_xtra -> advect_concen),
 			     (NULL, NULL, temp_data_placeholder));
-   temp_data_placeholder += max(
+   temp_data_placeholder += pfmax(
 		     PFModuleSizeOfTempData(instance_xtra -> retardation),
                      PFModuleSizeOfTempData(instance_xtra -> advect_concen)
                                );
@@ -2054,6 +2119,7 @@ PFModule   *SolverImpesNewPublicXtra(char *name)
        public_xtra -> write_silo_satur ||
        public_xtra -> write_silo_concen
       ) {
+
       WriteSiloInit(GlobalsOutFileName);
    }
 
@@ -2096,8 +2162,5 @@ void   SolverImpesFreePublicXtra()
 
 int  SolverImpesSizeOfTempData()
 {
-
-   /* SGS temp data */
-
    return 0;
 }

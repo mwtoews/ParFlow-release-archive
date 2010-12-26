@@ -31,6 +31,7 @@
 
 #include "parflow.h"
 
+#include <string.h>
 
 /*--------------------------------------------------------------------------
  * Structures
@@ -125,13 +126,9 @@ GrGeomSolid  **gr_geounits)
    WellData         *well_data = ProblemDataWellData(problem_data);
    WellDataPhysical *well_data_physical;
 
-   CommHandle       *handle;
+   VectorUpdateCommHandle       *handle;
 
    GrGeomSolid      *gr_solid,*gr_domain;
-
-   /* Alias the perm_z vector as temporary since this is the last one
-      to be filled */
-   Vector           *tmp_perm         = perm_z;
 
    Grid             *grid             = VectorGrid(perm_x);
 
@@ -141,7 +138,7 @@ GrGeomSolid  **gr_geounits)
                     *well_subgrid,
                     *tmp_subgrid;
 
-   Subvector        *perm_x_sub, *perm_y_sub, *perm_z_sub, *tmp_perm_sub;
+   Subvector        *perm_x_sub, *perm_y_sub, *perm_z_sub;
    Subvector        *kx_values_sub, *ky_values_sub, *kz_values_sub;
 
    int               ix, iy, iz;
@@ -153,7 +150,7 @@ GrGeomSolid  **gr_geounits)
    int               ipx, ipy, ipz, itp;
    double           *perm_x_elt, *perm_y_elt, *perm_z_elt;
 
-   double           *perm_x_dat, *perm_y_dat, *perm_z_dat, *tmp_perm_dat;
+   double           *perm_x_dat, *perm_y_dat, *perm_z_dat;
    double           *kx_values_dat, *ky_values_dat, *kz_values_dat; 
    double            well_volume, cell_volume;
    double            perm_average_x, perm_average_y, perm_average_z;
@@ -177,17 +174,23 @@ GrGeomSolid  **gr_geounits)
     * Compute permeability in the geounits
     *------------------------------------------------------------------------*/
 
+   /*
+    * Compute perm in z component, this will later be assigned to x,y with tensor
+    * applied.
+    */
    for (i = 0; i < num_geo_indexes; i++)
    {
       j = geo_indexes[i];
       PFModuleInvokeType(KFieldSimulatorInvoke,
 			 KFieldSimulators[i],
-			 (geounits[j], gr_geounits[j], tmp_perm, cdata));
+			 (geounits[j], gr_geounits[j], perm_z, cdata));
    }
 
    /*------------------------------------------------------------------------
     * Multiply by scalars k_x, k_y and k_z which can vary by cell
     *------------------------------------------------------------------------*/
+
+
 
    switch( public_xtra->type )
    {
@@ -225,7 +228,6 @@ GrGeomSolid  **gr_geounits)
 	    perm_x_sub = VectorSubvector(perm_x, sg);
 	    perm_y_sub = VectorSubvector(perm_y, sg);
 	    perm_z_sub = VectorSubvector(perm_z, sg);
-	    tmp_perm_sub = VectorSubvector(tmp_perm, sg);
 
 	    ix = SubgridIX(subgrid);
 	    iy = SubgridIY(subgrid);
@@ -240,20 +242,22 @@ GrGeomSolid  **gr_geounits)
 	    perm_x_dat = SubvectorData(perm_x_sub);
 	    perm_y_dat = SubvectorData(perm_y_sub);
 	    perm_z_dat = SubvectorData(perm_z_sub);
-	    tmp_perm_dat = SubvectorData(tmp_perm_sub);
+
 
 	    GrGeomInLoop(i, j, k, gr_solid, r, ix, iy, iz, nx, ny, nz,
 	    {
 	       ipx = SubvectorEltIndex(perm_x_sub, i, j, k);
 	       ipy = SubvectorEltIndex(perm_y_sub, i, j, k);
 	       ipz = SubvectorEltIndex(perm_z_sub, i, j, k);
-	       itp = SubvectorEltIndex(tmp_perm_sub, i, j, k);
 
-	       perm_x_dat[ipx] = tmp_perm_dat[itp] * kx_values[ir];
-	       perm_y_dat[ipy] = tmp_perm_dat[itp] * ky_values[ir];
-	       perm_z_dat[ipz] = tmp_perm_dat[itp] * kz_values[ir];
+	       perm_x_dat[ipx] = perm_z_dat[ipz] * kx_values[ir];
+	       perm_y_dat[ipy] = perm_z_dat[ipz] * ky_values[ir];
+	       perm_z_dat[ipz] = perm_z_dat[ipz] * kz_values[ir];
 	    });
 
+            // SGS if this is important here why does it not appear in loop below?
+	    // SGS This loop should not be here, looping over outside of domain multiple
+	    // times.
 	    GrGeomOutLoop(i, j, k, gr_domain, r, ix, iy, iz, nx, ny, nz,
 	    {
 	       ipx = SubvectorEltIndex(perm_x_sub, i, j, k);
@@ -264,7 +268,6 @@ GrGeomSolid  **gr_geounits)
 	       perm_y_dat[ipy] = 0.0;
 	       perm_z_dat[ipz] = 0.0;
 	    });
-
 	 }   /* End subgrid loop */
       }      /* End loop over regions */
       
@@ -286,38 +289,31 @@ GrGeomSolid  **gr_geounits)
 
 	  gr_domain = ProblemDataGrDomain(problem_data);
       
-   //   PFVProd(kx_values, tmp_perm, perm_x); /* perm_x = kx_values * tmp_perm */
-   //   PFVProd(ky_values, tmp_perm, perm_y); /* perm_y = ky_values * tmp_perm */
-   //   PFVProd(kz_values, tmp_perm, perm_z); /* perm_z = kz_values * tmp_perm */
-   //   Vector *sc_values;
-
 	   ForSubgridI(sg, GridSubgrids(grid))
 	   {
-		   subgrid = SubgridArraySubgrid(GridSubgrids(grid), sg);
-
-	       perm_x_sub = VectorSubvector(perm_x, sg);
-	       perm_y_sub = VectorSubvector(perm_y, sg);
-	       perm_z_sub = VectorSubvector(perm_z, sg);
-	       tmp_perm_sub = VectorSubvector(tmp_perm, sg);
-
-		   kx_values_sub = VectorSubvector(kx_values, sg);
-	       ky_values_sub = VectorSubvector(ky_values, sg);
-	       kz_values_sub = VectorSubvector(kz_values, sg);
-
-		   ix = SubgridIX(subgrid);
-		   iy = SubgridIY(subgrid);
-		   iz = SubgridIZ(subgrid);
-
-		   nx = SubgridNX(subgrid);
-		   ny = SubgridNY(subgrid);
-		   nz = SubgridNZ(subgrid);
-
-		   r = SubgridRX(subgrid);
-
+	      subgrid = SubgridArraySubgrid(GridSubgrids(grid), sg);
+	      
+	      perm_x_sub = VectorSubvector(perm_x, sg);
+	      perm_y_sub = VectorSubvector(perm_y, sg);
+	      perm_z_sub = VectorSubvector(perm_z, sg);
+	      
+	      kx_values_sub = VectorSubvector(kx_values, sg);
+	      ky_values_sub = VectorSubvector(ky_values, sg);
+	      kz_values_sub = VectorSubvector(kz_values, sg);
+	      
+	      ix = SubgridIX(subgrid);
+	      iy = SubgridIY(subgrid);
+	      iz = SubgridIZ(subgrid);
+	      
+	      nx = SubgridNX(subgrid);
+	      ny = SubgridNY(subgrid);
+	      nz = SubgridNZ(subgrid);
+	      
+	      r = SubgridRX(subgrid);
+	      
 	       perm_x_dat = SubvectorData(perm_x_sub);
 	       perm_y_dat = SubvectorData(perm_y_sub);
 	       perm_z_dat = SubvectorData(perm_z_sub);
-	       tmp_perm_dat = SubvectorData(tmp_perm_sub);
 
 	       kx_values_dat = SubvectorData(kx_values_sub);
 	       ky_values_dat = SubvectorData(ky_values_sub);
@@ -328,11 +324,10 @@ GrGeomSolid  **gr_geounits)
 	           ipx = SubvectorEltIndex(kx_values_sub, i, j, k);
 	           ipy = SubvectorEltIndex(ky_values_sub, i, j, k);
 	           ipz = SubvectorEltIndex(ky_values_sub, i, j, k);
-	           itp = SubvectorEltIndex(tmp_perm_sub, i, j, k);
 		  
-	           perm_x_dat[ipx] = tmp_perm_dat[itp] * kx_values_dat[ipx];
-	           perm_y_dat[ipy] = tmp_perm_dat[itp] * ky_values_dat[ipy];
-	           perm_z_dat[ipz] = tmp_perm_dat[itp] * kz_values_dat[ipz];
+	           perm_x_dat[ipx] = perm_z_dat[ipz] * kx_values_dat[ipx];
+	           perm_y_dat[ipy] = perm_z_dat[ipz] * ky_values_dat[ipy];
+	           perm_z_dat[ipz] = perm_z_dat[ipz] * kz_values_dat[ipz];
 		   });
 	   } /* End subgrid loop */
       break;
@@ -342,6 +337,7 @@ GrGeomSolid  **gr_geounits)
 
    
    }         /* End switch statement */
+
 
    /*-----------------------------------------------------------------------
     * exchange boundary data for cell permeability values
@@ -510,7 +506,7 @@ PFModule  *SubsrfSimInitInstanceXtra(
       {
 	 dummy1 = (Type1 *)(public_xtra -> data);
 
-	 dummy1 -> kx_values = NewVector(grid, 1, 1);
+	 dummy1 -> kx_values = NewVectorType(grid, 1, 1, vector_cell_centered);
 	 
 	 ReadPFBinary((dummy1 ->kx_file_name), 
 		      (dummy1 ->kx_values));
@@ -525,7 +521,7 @@ PFModule  *SubsrfSimInitInstanceXtra(
       {
 	 dummy1 = (Type1 *)(public_xtra -> data);
 	 
-	 dummy1 -> ky_values = NewVector(grid, 1, 1);
+	 dummy1 -> ky_values = NewVectorType(grid, 1, 1, vector_cell_centered);
 
 	 ReadPFBinary((dummy1 ->ky_file_name), 
 		      (dummy1 ->ky_values));
@@ -541,7 +537,7 @@ PFModule  *SubsrfSimInitInstanceXtra(
       {
 	 dummy1 = (Type1 *)(public_xtra -> data);
 
-	 dummy1 -> kz_values = NewVector(grid, 1, 1);
+	 dummy1 -> kz_values = NewVectorType(grid, 1, 1, vector_cell_centered);
 
 	 ReadPFBinary((dummy1 ->kz_file_name), 
 		      (dummy1 ->kz_values));
@@ -714,7 +710,7 @@ PFModule   *SubsrfSimNewPublicXtra()
       geom_name = NA_IndexToName(geo_index_na,i);
 
       public_xtra -> geo_indexes[i] = NA_NameToIndex(GlobalsGeomNames,
-						       geom_name);
+						     geom_name);
 
       if(  public_xtra -> geo_indexes[i] < 0 )
       {
@@ -790,6 +786,9 @@ PFModule   *SubsrfSimNewPublicXtra()
          for (i = 0; i < num_tens_indexes; i++)
          {
             geom_name = NA_IndexToName(geo_index_na, i);
+
+	    dummy0 -> tens_indexes[i] = NA_NameToIndex(GlobalsGeomNames,
+						       geom_name);
 
 	    sprintf(key, "Geom.%s.Perm.TensorValX", geom_name);
 	    dummy0 -> kx_values[i] = GetDouble(key);
@@ -906,7 +905,7 @@ int  SubsrfSimSizeOfTempData()
 
    /* set `sz' to max of each of the called modules */
    for (n = 0; n < (public_xtra -> num_geo_indexes); n++)
-      sz = max(sz,
+      sz = pfmax(sz,
 	       PFModuleSizeOfTempData((instance_xtra -> KFieldSimulators)[n]));
 
    return sz;

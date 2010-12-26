@@ -111,12 +111,12 @@ void         SetBackgroundBounds(
 
       if (SubgridLevel(subgrid) == 0)
       {
-	 ix_lower = min(ix_lower, SubgridIX(subgrid));
-	 iy_lower = min(iy_lower, SubgridIY(subgrid));
-	 iz_lower = min(iz_lower, SubgridIZ(subgrid));
-	 ix_upper = max(ix_upper, SubgridIX(subgrid) + SubgridNX(subgrid) - 1);
-	 iy_upper = max(iy_upper, SubgridIY(subgrid) + SubgridNY(subgrid) - 1);
-	 iz_upper = max(iz_upper, SubgridIZ(subgrid) + SubgridNZ(subgrid) - 1);
+	 ix_lower = pfmin(ix_lower, SubgridIX(subgrid));
+	 iy_lower = pfmin(iy_lower, SubgridIY(subgrid));
+	 iz_lower = pfmin(iz_lower, SubgridIZ(subgrid));
+	 ix_upper = pfmax(ix_upper, SubgridIX(subgrid) + SubgridNX(subgrid) - 1);
+	 iy_upper = pfmax(iy_upper, SubgridIY(subgrid) + SubgridNY(subgrid) - 1);
+	 iz_upper = pfmax(iz_upper, SubgridIZ(subgrid) + SubgridNZ(subgrid) - 1);
       }
    }
 

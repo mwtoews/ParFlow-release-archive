@@ -28,6 +28,8 @@
 
 #include "parflow.h"
 
+#include <float.h>
+
 /*--------------------------------------------------------------------------
  * Structures
  *--------------------------------------------------------------------------*/
@@ -171,17 +173,18 @@ Problem     *problem)      /* General problem information */
     * Allocate temp vectors
     *-----------------------------------------------------------------------*/
 
-   temp_new_density     = NewVector(instance_xtra -> grid, 1, 1);
-   temp_new_density_der = NewVector(instance_xtra -> grid, 1, 1);
-   temp_fcn             = NewVector(instance_xtra -> grid, 1, 1);
+   temp_new_density     = NewVectorType(instance_xtra -> grid, 1, 1, vector_cell_centered);
+   temp_new_density_der = NewVectorType(instance_xtra -> grid, 1, 1, vector_cell_centered);
+   temp_fcn             = NewVectorType(instance_xtra -> grid, 1, 1, vector_cell_centered);
 
    /*-----------------------------------------------------------------------
     * Initial pressure conditions
     *-----------------------------------------------------------------------*/
 
    /* SGS Some of this initialization is being done multiple places. Why is that?*/
+   // SGS where is this macro coming from?
+#undef max
    InitVector(ic_pressure, -FLT_MAX);
-//   InitVector(ic_pressure, 0.0);
    InitVector(temp_new_density, 0.0);
    InitVector(temp_new_density_der, 0.0);
    InitVector(temp_fcn, 0.0);
@@ -314,7 +317,7 @@ Problem     *problem)      /* General problem information */
                   GrGeomInLoop(i, j, k, gr_solid, r, ix, iy, iz, nx, ny, nz,
                   {
                      ips = SubvectorEltIndex(m_sub, i, j, k);
-                     m_dat[ips] = 1.0;
+                     m_dat[ips] = region_indices[ir]+1;
                   });
             }     /* End of subgrid loop */
          }        /* End of region loop */
@@ -501,7 +504,7 @@ Problem     *problem)      /* General problem information */
 	    GrGeomInLoop(i, j, k, gr_solid, r, ix, iy, iz, nx, ny, nz,
 			 { 
 			    ips = SubvectorEltIndex(m_sub, i, j, k);
-			    m_dat[ips] = 1.0;  
+			    m_dat[ips] = region_indices[ir]+1;  
 			 });  
 	    
 	 }     /* End of subgrid loop */ 
@@ -712,7 +715,9 @@ Problem     *problem)      /* General problem information */
 	    ipicv = SubvectorEltIndex(ic_values_sub, i, j, k);
 
 	    psdat[ips] = ic_values_dat[ipicv];
-            m_dat[ips] = 1.0;
+	    // SGS fixthis
+            m_dat[ips] = 99999;
+//            m_dat[ips] = 1.0;
 	 });
       }        /* End subgrid loop */
 
@@ -768,7 +773,7 @@ PFModule  *ICPhasePressureInitInstanceXtra(
 	 dummy3 = (Type3 *)(public_xtra -> data);
 
 	 /* Allocate temp vector */
-	 dummy3 -> ic_values = NewVector(grid, 1, 1);
+	 dummy3 -> ic_values = NewVectorType(grid, 1, 1, vector_cell_centered);
 
          ReadPFBinary((dummy3 -> filename), 
 		      (dummy3 -> ic_values));

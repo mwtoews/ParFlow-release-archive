@@ -115,6 +115,7 @@ static char *SAVEPFUSAGE   = "Usage: pfsave dataset -filetype filename\n       f
 static char *GETLISTUSAGE  = "Usage: pfgetlist [dataset]\n";
 static char *GETELTUSAGE   = "Usage: pfgetelt dataset i j k\n"; 
 static char *GETGRIDUSAGE  = "Usage: pfgetgrid dataset\n";
+static char *SETGRIDUSAGE  = "Usage: pfsetgrid { nx ny nz } { x y z } { dx dy dz } dataset\n       Types: int nx, ny, nz;  double x, y, z, dx, dy, dz;\n";
 static char *GRIDTYPEUSAGE = "Usage: pfgridtype [vertex | cell]\n";
 static char *CVELUSAGE     = "Usage: pfcvel conductivity phead\n";
 static char *VVELUSAGE     = "Usage: pfvvel conductivity phead\n";
@@ -139,13 +140,32 @@ static char *DIFFELTUSAGE  = "Usage: pfdiffelt datasetp datasetq i j k sig_digs 
 static char *NEWGRIDUSAGE  = "Usage: pfnewgrid {nx ny nz} {x y z} {dx dy dz} label\n       Types: int nx, ny, nz;  double x, y, z, dx, dy, dz;\n";
 static char *NEWLABELUSAGE = "Usage: pfnewlabel dataset newlabel\n";
 static char *PFCOMPUTETOPUSAGE          = "Usage: pfcomputetop mask\n";
+static char *PFCOMPUTEBOTTOMUSAGE       = "Usage: pfcomputebottom mask\n";
+static char *PFCOMPUTEDOMAINUSAGE       = "Usage: pfcomputedomain top\n";
+static char *PFPRINTDOMAINUSAGE         = "Usage: pfcomputedomain subgrid_array\n";
+static char *PFEXTRACT2DDOMAINUSAGE         = "Usage: pfexctract2Ddomain subgrid_array\n";
+static char *PFBUILDDOMAINUSAGE         = "Usage: pfbuilddomain\n";
+static char *PFDISTONDOMAINUSAGE        = "Usage: pfdistondomain filename subgrid_array\n";
 static char *PFEXTRACTTOPUSAGE          = "Usage: pfextracttop top dataset\n";
 static char *PFSURFACESTORAGEUSAGE      = "Usage: pfsuracestorge top pressure\n";
 static char *PFSUBSURFACESTORAGEUSAGE   = "Usage: pfsubsuracestorge mask porosity pressure saturation specific_storage\n";
 static char *PFGWSTORAGEUSAGE           = "Usage: pfgwstorge mask porosity pressure saturation specific_storage\n";
 static char *PFSURFACERUNOFFUSAGE       = "Usage: pfsuracerunoff top slope_x slope_y mannings pressure\n";
 static char *PFWATERTABLEDEPTHUSAGE     = "Usage: pfwatertabledepth top saturation\n";
-static char *DELETEUSAGE   = "Usage: pfdelete dataset\n";
+static char *PFSLOPEXUSAGE              = "Usage: pfslopex dem\n";
+static char *PFSLOPEYUSAGE              = "Usage: pfslopey dem\n";
+static char *PFUPSTREAMAREAUSAGE        = "Usage: pfupstreamarea dem sx sy\n";
+static char *PFFILLFLATSUSAGE           = "Usage: pffillflats dem \n";
+static char *PFPITFILLDEMUSAGE          = "Usage: pfpitfilldem dem dpit maxiter\n";
+static char *PFMOVINGAVGDEMUSAGE        = "Usage: pfmovingavgdem dem wsize maxiter\n";
+static char *PFSLOPED8USAGE             = "Usage: pfslopeD8 dem\n";
+static char *PFSEGMENTD8USAGE           = "Usage: pfsegmentD8 dem\n";
+static char *PFCHILDD8USAGE             = "Usage: pfchildD8 dem\n";
+static char *PFFLINTSLAWDEMUSAGE        = "Usage: pfflintslaw dem c p\n";
+static char *PFFLINTSLAWFITUSAGE        = "Usage: pfflintslawfit dem c0 p0 maxiter\n";
+static char *PFFLINTSLAWBYBASINUSAGE    = "Usage: pfflintslawbybasin dem c0 p0 maxiter\n";
+static char *DELETEUSAGE                = "Usage: pfdelete dataset\n";
+
 
 /*-----------------------------------------------------------------------
  * function prototypes

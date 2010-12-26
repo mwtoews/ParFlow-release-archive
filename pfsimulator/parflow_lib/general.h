@@ -34,6 +34,16 @@
 #ifndef _GENERAL_HEADER
 #define _GENERAL_HEADER
 
+#include <float.h>
+
+/*--------------------------------------------------------------------------
+ * Error macros
+ *--------------------------------------------------------------------------*/
+
+#define PARFLOW_ERROR(X)				\
+   do {							\
+      _amps_Abort(X, __FILE__, __LINE__);		\
+   } while (0)
 
 /*--------------------------------------------------------------------------
  * Define memory allocation routines
@@ -53,7 +63,7 @@
 		    __FILE__, __LINE__)
 
 /* note: the `else' is required to guarantee termination of the `if' */
-#define tfree(ptr) if (ptr) free(ptr); else
+#define tfree(ptr) if (ptr) free(ptr); else {}
 
 /*--------------------------------------
  * Do not check memory allocation
@@ -62,13 +72,13 @@
 #else
 
 #define talloc(type, count) \
-   ((count) ? (type *) malloc((unsigned int)(sizeof(type) * (count))) : NULL)
+   ((count) ? (type *) malloc(sizeof(type) * (size_t)(count)) : NULL)
 
 #define ctalloc(type, count) \
    ((count) ? (type *) calloc((unsigned int)(count), (unsigned int)sizeof(type)) : NULL)
 
 /* note: the `else' is required to guarantee termination of the `if' */
-#define tfree(ptr) if (ptr) free(ptr); else
+#define tfree(ptr) if (ptr) free(ptr); else {}
 
 #endif
 
@@ -86,15 +96,15 @@
  * Define various functions
  *--------------------------------------------------------------------------*/
 
-#ifndef max
-#define max(a,b)  (((a)<(b)) ? (b) : (a))
+#ifndef pfmax
+#define pfmax(a,b)  (((a)<(b)) ? (b) : (a))
 #endif
-#ifndef min
-#define min(a,b)  (((a)<(b)) ? (a) : (b))
+#ifndef pfmin
+#define pfmin(a,b)  (((a)<(b)) ? (a) : (b))
 #endif
 
-#ifndef round
-#define round(x)  ( ((x) < 0.0) ? ((int)(x - 0.5)) : ((int)(x + 0.5)) )
+#ifndef pfround
+#define pfround(x)  ( ((x) < 0.0) ? ((int)(x - 0.5)) : ((int)(x + 0.5)) )
 #endif
 
 /* return 2^e, where e >= 0 is an integer */
@@ -133,6 +143,7 @@
 #define GetDoubleDefault(key, default) IDB_GetDoubleDefault(amps_ThreadLocal(input_database), (key), (default))
 #define GetStringDefault(key, default) IDB_GetStringDefault(amps_ThreadLocal(input_database), (key), (default))
 
+#define TIME_EPSILON (FLT_EPSILON * 10)
 
 #endif
 

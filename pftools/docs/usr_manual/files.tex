@@ -1557,12 +1557,33 @@ specified on {\em geom\_name}.
 pfset Geom.domain.RelPerm.Alpha  0.005
 \end{verbatim}\end{display}
 
+
 \pfkey{double}{Geom.{\em geom\_name}.RelPerm.N}{no default}
 {This key specifies the $N$ parameter for the Van Genuchten function specified
 on {\em geom\_name}.
 }
 \begin{display}\begin{verbatim}
 pfset Geom.domain.RelPerm.N   2.0
+\end{verbatim}\end{display}
+
+\pfkey{int}{Geom.{\em geom\_name}.RelPerm.NumSamplePoints}{0}
+{This key specifies the number of sample points for a spline base interpolation table
+for the Van Genuchten function specified on {\em geom\_name}.   If this number is 0 (the default) 
+then the function is evaluated directly.   Using the interpolation table is faster but is less
+accurate.
+}
+\begin{display}\begin{verbatim}
+pfset Geom.domain.RelPerm.NumSamplePoints  20000
+\end{verbatim}\end{display}
+
+\pfkey{int}{Geom.{\em geom\_name}.RelPerm.MinPressureHead}{no default}
+ {This key specifies the lower value for a spline base interpolation
+ table for the Van Genuchten function specified on {\em geom\_name}.
+  The upper value of the range is 0.  This value is used only when the
+ table lookup method is used ({\em NumSamplePoints} is greater than 0).
+  }
+\begin{display}\begin{verbatim}
+pfset Geom.domain.RelPerm.MinPressureHead -300
 \end{verbatim}\end{display}
 
 \pfkey{double}{Geom.{\em geom\_name}.RelPerm.A}{no default}
@@ -3231,6 +3252,33 @@ timing information section.
 }
 \begin{display}\begin{verbatim}
 pfset Solver.WriteSiloOverlandSum  True
+\end{verbatim}\end{display}
+
+%=============================================================================
+%=============================================================================
+
+\subsection{SILO Options}
+\label{SILO Options}
+
+The following keys are used to control how SILO writes data.  SILO
+ allows writing to PDB and HDF5 file formats.  SILO also allows data
+ compression to be used, which can save signicant amounts of disk
+ space for some problems.  
+
+\pfkey{string}{SILO.Filetype}{PDB}
+{
+This key is used to specify the SILO filetype.   Allowed values are PDB and HDF5.  Note that you must have configured SILO with HDF5 in order to use that option.}
+\begin{display}\begin{verbatim}
+pfset SILO.Filetype  PDB
+\end{verbatim}\end{display}
+
+
+\pfkey{string}{SILO.CompressionOptions}{}
+{
+This key is used to specify the SILO compression options. See the SILO manual for the
+ DB\_SetCompression command for information on available options.   NOTE: the options avaialable are highly dependent on the configure options when building SILO.}
+\begin{display}\begin{verbatim}
+pfset SILO.CompressionOptions  ``METHOD=GZIP''
 \end{verbatim}\end{display}
 
 
