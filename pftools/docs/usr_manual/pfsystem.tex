@@ -6,11 +6,15 @@
 
 The \parflow{} system is still evolving, but here we discuss how to define the problem in
 \S~\ref{Defining the Problem}, how to run \parflow{} in
-\S~\ref{Running ParFlow}, and options for to visualizing the results in
-\S~\ref{Visualizing Output}.  There is also a utility providing a set
-of functions for manipulating \parflow{} data.  This utility is discussed in 
-\S~\ref{Manipulating Data}.  Lastly, \S~\ref{Test Directory} discusses the
-contents of a directory of test problems provided with \parflow{}.
+\S~\ref{Running ParFlow}, and restart a simulation in \S~\ref{Restarting a Run}.
+We also cover options for visualizing the results in
+\S~\ref{Visualizing Output} and summarize the contents of a directory of test problems 
+provided with \parflow{} in \S~\ref{Test Directory}.  Finally in \S~\ref{Tutorial}
+we walk through two \parflow{} input scripts in detail. 
+
+
+The reader is also referred to \S~\ref{Manipulating Data}
+for a detailed listing of the of functions for manipulating \parflow{} data.  
 
 %=============================================================================
 %=============================================================================
@@ -18,22 +22,42 @@ contents of a directory of test problems provided with \parflow{}.
 \section{Defining the Problem}
 \label{Defining the Problem}
 
-Defining the problem may involve several steps.
-One of these steps may require definition complicated geometries such as hydrostratigraphic layers.
-These geometries are then converted to the
-\file{.pfsol} file format (\S~\ref{ParFlow Solid Files (.pfsol)})
-using the appropriate \pftools{} conversion utility
-(\S~\ref{Manipulating Data}).
+There are many ways to define a problem in \parflow{}, here we summarize the general 
+approach for defining a domain (\S~\ref{Defining a domain}) and simulating
+ a real watershed (\S~\ref{Defining a Real domain}). 
 
-The "main" \parflow{} input file is the \file{.tcl} file.
+In all cases the ``main" \parflow{} input file is the \file{.tcl} file.
 This input file is a TCL script with some special routines to
 create a database which is used as the input for \parflow{}.
-See \S~\ref{Main Input File (.pftcl)} for details on the format
+See \S~\ref{Main Input File (.tcl)} for details on the format
 of this file.
 The input values into \parflow{} are defined by a key/value pair.  For
 each key you provide the associated value using the \code{pfset} command
-inside the input script.  To set the computational grid for the problem
-you would enter:
+inside the input script. 
+
+Since the input file is a TCL script you can use any feature of TCL to
+define the problem.  This manual will make no effort to teach TCL so
+refer to one of the available TCL manuals for more information
+(``Practical Programming in TCL and TK'' by Brent Welch \cite{welch.95} 
+is a good starting point).  
+This is NOT required, you can get along fine without understanding TCL/TK.
+
+Looking at the example programs in the \file{test} directory (\S~\ref{Test Directory}) and 
+going through the annotated input scripts included in this manual ( \S~\ref{Tutorial}) is 
+one of the best ways to understand what a \parflow{} input file looks like. 
+
+\subsection{Basic Domain Definition}
+\label{Defining a domain}
+
+ParFlow can handle complex geometries and defining the problem may involve several steps.
+Users can specify simple box domains directly in the \file{tcl} script. If a more complicated
+domain is required, the user may convert geometries into the \file{.pfsol} file format 
+(\S~\ref{ParFlow Solid Files (.pfsol)}) using the appropriate \pftools{} conversion utility 
+(\S~\ref{Manipulating Data}).  Alternatively, the topography can be specified using 
+\file{.pfb} files of the slopes in the x and y directions.
+
+Regardless of the approach the user must set the computational grid within the \file{.pfb} 
+script as follows:
 
 \begin{display}\begin{verbatim}
 #-----------------------------------------------------------------------------
@@ -43,8 +67,8 @@ pfset ComputationalGrid.Lower.X                -10.0
 pfset ComputationalGrid.Lower.Y                 10.0
 pfset ComputationalGrid.Lower.Z                  1.0
  
-pfset ComputationalGrid.DX                       8.8888888888888893
-pfset ComputationalGrid.DY                      10.666666666666666
+pfset ComputationalGrid.DX                       8.89
+pfset ComputationalGrid.DY                      10.67
 pfset ComputationalGrid.DZ                       1.0
  
 pfset ComputationalGrid.NX                      18
@@ -70,17 +94,129 @@ pfset Geom.domain.Patches "very_long_name_1 very_long_name_2 very_long_name_3 \
                            very_long_name_4 very_long_name_5 very_long_name_6"
 \end{verbatim}\end{display}
 
+%=============================================================================
+%=============================================================================
+\subsection{Setting Up a Real Domain}
+\label{Defining a Real domain}
 
-Since the input file is a TCL script you can use any feature of TCL to
-define the problem.  This manual will make no effort to teach TCL so
-refer to one of the available TCL manuals for more information
-(``Practical Programming in TCL and TK'' by Brent Welch \cite{welch.95} 
-is a good starting point).  
-This is NOT required, you can get along fine without understanding TCL/TK.
+This section provides a brief outline of a sample workflow for setup \parflow{} \code{CLM} 
+simulation of a real domain. Of course there are many ways to accomplish this and users
+are encouraged to develop a workflow that works for them. 
 
-Looking at the example programs in the \file{test} directory is one of
-the best ways to understand what a \parflow{} input file looks like. See
-\S~\ref{Test Directory}.  
+This example assumes that you are running with \parflow{} \code{CLM} and it uses 
+slope files and an indicator file to define the topography and geologic units of the domain. 
+An alternate approach would be to define geometries by building a \file{.pfsol} file 
+(\S~\ref{ParFlow Solid Files (.pfsol)}) using the appropriate \pftools{} conversion 
+utility(\S~\ref{Manipulating Data}).
+
+The general approach is as follows:
+
+\begin{enumerate}
+   \item Gather input datasets to define the domain. First decide the resolution that you 
+   would like to simulate at. Then gather the following datasets at the appropriate resolution 
+   for your domain:
+   \begin{enumerate}
+		\item Elevation (DEM)
+	    \item Soil data for the near surface layers 
+	    \item Geologic maps for the deeper subsurface
+	    \item Land Cover
+	\end{enumerate}
+	
+   \item Create consistent gridded layers that are all clipped to your domain and have 
+  the same number of grid cells
+
+   \item Convert gridded files to \file{.pfb} (\S~\ref{ParFlow Binary Files (.pfb)}). One way 
+   to accomplish this is by reformatting the gridded outputs to the correct \parflow{}
+   \file{.sa} order (\S~\ref{ParFlow Simple ASCII Files (.sa and .sb)}) and to convert
+   the \file{.sa} file to \file{.pfb} using the conversion tools (see \S~\ref{common_pftcl}
+   Example 1)
+  
+   \item Calculate slopes in the x and y directions from the elevation dataset. This can be 
+   done with the built in tools as shown in \S~\ref{common_pftcl} Example 5. 
+   In most cases some additional processing of  the DEM will be required to ensure that 
+   the drainage patterns are correct. To check this  you  can run a ``parking lot test" by 
+   setting the permeability of surface to almost zero and adding a flux to the top surface.
+   If the results from this test don't look right (i.e. your runoff patterns don't match 
+   what you expect) you will need to go back and modify your DEM.  The built in \parflow{}
+   tools pitfill and flatfill can be used to address some issues. 
+   (These tools are also shown in \S~\ref{common_pftcl} Example 5). 
+
+   \item Create an indicator file for the subsurface. The indicator file is a 3D \file{.pfb} 
+   file with the same dimensions as your domain that has an integer for every cell 
+   designating which unit it belongs to. The units you define will correspond to the soil 
+   types and geologic units from your input datasets. 
+
+   \item Determine the hydrologic properties for each of the subsurface units defined in 
+   the indicator file. You will need: Permeability, specific storage, porosity and 
+   vanGenuchten parameters. 
+
+   \item At this point you are ready to run a \parflow{} model without \code{CLM} and if you 
+   don't need to include the land surface model in your simulations you can ignore the 
+   following steps. Either way, at this point it is advisable to run a ``spinup" simulation 
+   to initialize the water table. There are several ways to approach this. One way is to 
+   start with the water table at a constant depth and run for 
+   a long time with a constant recharge forcing until the water table reaches a steady 
+   state. There are some additional key for spinup runs that are provided in \S~\ref{Spinup Options}.
+
+   \item Convert land cover classifications to the IGBP\footnote{http://www.igbp.net}
+   land cover classes that are used in CLM. 
+   
+   \begin{itemize}
+		 \item[] 1. Evergreen Needleleaf Forest
+		 \item[] 2. Evergreen Broadleaf Forest
+		 \item[] 3. Deciduous Needleleaf Forest
+		 \item[] 4. Deciduous Broadleaf Forest
+		 \item[] 5. Mixed Forests
+		 \item[] 6. Closed Shrublands
+		 \item[] 7. Open Shrublands
+		 \item[] 8. Woody Savannas
+		 \item[] 9. Savannas
+     	 \item[] 10. Grasslands
+		 \item[] 11. Permanent Wetlands
+		 \item[] 12. Croplands
+		 \item[] 13. Urban and Built-Up
+		 \item[] 14. Cropland/Natural Vegetation Mosaic
+		 \item[] 15. Snow and Ice
+		 \item[] 16. Barren or Sparsely Vegetated
+		 \item[] 17. Water
+		 \item[] 18. Wooded Tundra
+  \end{itemize}
+
+   \item Create a \code{CLM} vegm file that designates the land cover fractions for every 
+   cell (Refer to the \file{clm input} directory in the Washita Example for an sample of 
+   what a \file{vegm} file should look like).
+
+   \item Create a \code{CLM} driver file to set the parameters for the CLM model (Refer to the 
+   \file{clm input} directory in the Washita Example for a sample of a \code{CLM} driver file).
+
+   \item Assemble meteorological forcing data for your domain. CLM requires the following 
+   variables (also described on p. \pageref{clm_forcing}): 
+   
+   \begin{itemize}
+		\item DLWR: Long wave radiation $[W/m^2]$
+		\item DSWR: Visible or short-wave radiation $[W/m^2]$.
+		\item APCP: Precipitation $[mm/s]$
+		\item Temp: Air Temperature $[K]$
+		\item UGRD: East-west wind speed $[m/s]$
+		\item SPFH:	Specific humidity $[kg/kg]$
+		\item Press: Atmospheric pressure $[pa]$
+                \item VGRD: South-to-North wind speed $[m/s]$
+	\end{itemize}
+	
+	If you choose to do spatially heterogenous forcings you will need to generate separate 
+	files for each variable. The files should be formatted in the standard ParFlow format 
+	with the third (i.e. z dimension) as time. If you are doing hourly simulations it is 
+	standard practice to put 24 hours in one file, but you can decide how many time steps per 
+	file. For an example of heterogenous forcing files refer to the \file{NLDAS} directory
+	in the Washita Example)
+
+	Alternatively, if you would like to force the model with spatially homogenous forcings, 
+	then a single file can be provided where each variable is a column and rows designate 
+	time steps. 
+
+   \item Run your simulation!
+   
+\end{enumerate}
 
 %=============================================================================
 %=============================================================================
@@ -146,6 +282,8 @@ timings and MFLOP rates.  For Richards' equation problems (including overland fl
 name>.out.kinsol.log} file contains the nonlinear convergence information for each timestep.  Additionally, the \file{<run
 name>.out.tx} contains all information routed to \file{standard out} of the machine you are running on and often contains error messages and other control information.
 
+%=============================================================================
+%=============================================================================
 \section{Restarting a Run}
 \label{Restarting a Run}
 
@@ -154,10 +292,10 @@ system time limit has been reached, \parflow{} has been prematurely
 terminated or the user specifically sets up a problem to run in segments.
 In order to restart a run the user needs to know the conditions under which
 \parflow{} stopped.  If \parflow{} was prematurely terminated then the
-user must examine the output files from the last "timed dump" to see if
+user must examine the output files from the last ``timed dump" to see if
 they are complete.  If not then those data files should be discarded and the
-output files from the next to last "timed dump" will be used in the
-restarting procedure.  As an important note, if any set of "timed dump"
+output files from the next to last ``timed dump" will be used in the
+restarting procedure.  As an important note, if any set of ``timed dump"
 files are deleted remember to also delete corresponding lines in the well
 output file or recombining the well output files from the individual segments
 afterwards will be difficult.  It is not necessary to delete lines from
@@ -173,7 +311,7 @@ this procedure :
    \begin{itemize}
       \item Write down the dump sequence number for the last collection of
            ``timed dump'' data.
-      \item Examine the log file to find out what real time that "timed dump"
+      \item Examine the log file to find out what real time that ``timed dump"
             data was written out at and write it down.
    \end{itemize}
    \item Prepare input data files from output data files :
@@ -181,7 +319,7 @@ this procedure :
       \item Take the last pressure output file before the restart with the sequence number
             from above and format them for regular input using the keys detailed in \S~\ref{Initial Conditions: Pressure} and possibly the \code{pfdist} utility in the input script.
    \end{itemize}
-   \item Change the Main Input File \S~\ref{Main Input File (.pftcl)} :
+   \item Change the Main Input File \S~\ref{Main Input File (.tcl)} :
    \begin{itemize}
       \item Edit the .tcl file (you may want to save the old one) and
             utilize the pressure initial condition input file option (as referenced above) to specify
@@ -207,662 +345,12 @@ this procedure :
 \section{Visualizing Output}
 \label{Visualizing Output}
 
-While \parflow{} does not have any visualization capabilities built-in, there are a number flexible, free options.  Probably the best option is to use \emph{VisIt}. \emph{VisIt} is a powerful, free, open-source, rendering environment.  It is multiplatform and may be downloaded directly from:
-\begin{display}\begin{verbatim}
-https://wci.llnl.gov/codes/visit/
-\end{verbatim}\end{display}
+While \parflow{} does not have any visualization capabilities built-in, there are a number
+flexible, free options.  Probably the best option is to use \emph{VisIt}.
+\emph{VisIt} is a powerful, free, open-source, rendering environment.  It is 
+multiplatform and may be downloaded directly from:
+\code{https://visit.llnl.gov/}  \\
 The most flexible option for using \emph{VisIt} to view \parflow{} output is to write files using the \emph{SILO} format, which is available either as a direct output option (described in \S~\ref{Code Parameters}) or a conversion option using pftools.  Many other output conversion options exist as described in \S~\ref{Manipulating Data} and this allows \parflow{} output to be converted into formats used by almost all visualization software.
-%=============================================================================
-%=============================================================================
-
-\section{Manipulating Data}
-\label{Manipulating Data}
-
-\subsection{Introduction to the \parflow{} TCL commands (PFTCL) }
-
-Several tools for manipulating data are provided in PFTCL command set.
-In order to use them you need to load the \parflow{} package into
-the TCL shell.  If you are doing simple data manipulation the
-\file{xpftools} provides GUI access to most of these features.
-All of these tools are accessible inside of a \parflow{} input script.
-You can use them to do post and pre processing of datafiles each time
-you execute a run.
-
-\begin{display}\begin{verbatim}
-#
-# To Import the ParFlow TCL package
-#
-lappend auto_path $env(PARFLOW_DIR)/bin 
-package require parflow
-namespace import Parflow::*
-\end{verbatim}\end{display}
-
-Use \kbd{pfhelp} to get a list of commands.
-
-PFTCL assigns identifiers to each data set it stores.
-For example, if you read in a file called \file{foo.pfb},
-you get the following:
-\begin{display}\begin{verbatim}
-parflow> pfload foo.pfb
-dataset0
-\end{verbatim}\end{display}
-The first line is typed in by the user and the second line
-is printed out by PFTCL.
-It indicates that the data read from file \file{foo.pfb} is
-associated with the identifier \code{dataset0}.
-
-To exit use the standard TCL command \kbd{exit}.
-
-\subsection{PFTCL Commands}
-\label{PFTCL Commands}
-The following gives a list of \parflow{} commands and instructions for their use:
-Note that commands that perform operations on data sets will
-require an identifier for each data set it takes as input.
-
-\begin{description}
-
-\item{\begin{verbatim}pfaxpy alpha x y\end{verbatim}}
-This command computes y = alpha*x+y where alpha is a scalar and x and 
-y are identifiers representing data sets.  No data set identifier is
-returned upon successful completion since data set y is overwritten.
-
-
-\item{\begin{verbatim}pfcomputetop mask\end{verbatim}} 
-This command computes the the top of the domain based on the mask of
- active and inactive zones.  This is the land-surface in \code{clm} or
- overland flow simulations.  The identifier of the data set created by
- this operation is returned upon successful completion.
-
-
-\item{\begin{verbatim}pfwatertabledepth top saturation \end{verbatim}}
- This command computes the the water table depth (distance from top to
- first cell with saturation = 1).  The identifier of the data set
- created by this operation is returned upon successful completion.
-
-
-\item{\begin{verbatim}pfcellsum datasetp datasetq mask\end{verbatim}}
-This command computes the cellwise sum of two datasets (i.e., the sum at each
-individual cell, not the sum over the domain). Datasets must have the same
-dimensions. 
-
-
-\item{\begin{verbatim}pfcellsumconst dataset constant mask\end{verbatim}}
-This command adds the value of constant to each (active) cell of dataset. 
-
-
-\item{\begin{verbatim}pfcvel conductivity phead\end{verbatim}}
-This command computes the Darcy velocity in cells for the conductivity data set
-represented by the identifier `conductivity' and the pressure head
-data set represented by the identifier `phead'.  (note: This "cell"
-is not the same as the grid cells; its corners are defined by the
-grid vertices.)  The identifier of the data set created by this
-operation is returned upon successful completion.
-
-
-\item{\begin{verbatim}pfdelete dataset\end{verbatim}}
-This command deletes the data set represented by the identifier `dataset'.
-        
-
-\item{\begin{verbatim}pfdiffelt datasetp datasetq i j k digits [zero]\end{verbatim}}
-This command returns the difference of two corresponding coordinates
-from `datasetp' and `datasetq' if the number of digits in agreement
-(significant digits) differs by more than `digits' significant
-digits and the difference is greater than the absolute zero given     
-by `zero'.
-
-
-\item{\begin{verbatim}pfdist filename \end{verbatim}}
-Distribute the file onto the virtual file system.  This utility must
-be used to create files which \parflow{} can use as input.  \parflow{}
-uses a virtual file system which allows each node of the parallel
-machine to read from the input file independentaly.  The utility does
-the inverse of the pfundist command.  If you are using a \parflow{}
-binary file for input you should do a pfdist just before you do the
-pfrun.  This command requires that the processor topology and
-computational grid be set in the input file so that it knows how to
-distribute the data.
-
-\item{\begin{verbatim}pfdistondomain filename domain\end{verbatim}}
- Distribute the file onto the virtual file system based on the domain
- provided rather than the processor topology as used by pfdist.  This
- is used by the SAMRAI version of which allows for a more complicated
- computation domain specification with different sized subgrids on
- each processor and allows for more than one subgrid per processor.
-  Frequently this will be used with a domain created by the
- pfcomputedomain command.   
-
-\item{\begin{verbatim}pfcomputedomain top bottom\end{verbatim}} This
- command computes a domain based on the top and bottom data sets.  The
- domain built will have a single subgrid per processor that covers the
- active data as defined by the top and botttom.  This domain will more
- closely follow the topology of the terrain than the default single
- computation domain.  
-
-A typical usage pattern for this is to start with a mask file (zeros
- in inactive cells and non-zero in active cells), create the top and
- bottom from the mask, compute the domain and then write out the domain.
-
-
-\begin{verbatim}
-
-#---------------------------------------------------------
-# This example script takes 3 command line arguments
-# for P,Q,R and then builds a SAMRAI compatible 
-# domain decomposition based off of a mask file.
-#---------------------------------------------------------
-
-#---------------------------------------------------------
-# Processor Topology
-#---------------------------------------------------------
-
-set P  [lindex $argv 0]
-set Q  [lindex $argv 1]
-set R  [lindex $argv 2]
-
-pfset Process.Topology.P $P
-pfset Process.Topology.Q $Q   
-pfset Process.Topology.R $R
-
-#---------------------------------------------------------
-# Computational Grid
-#---------------------------------------------------------
-pfset ComputationalGrid.Lower.X                -10.0
-pfset ComputationalGrid.Lower.Y                 10.0
-pfset ComputationalGrid.Lower.Z                  1.0
-
-pfset ComputationalGrid.DX                       8.8888888888888893
-pfset ComputationalGrid.DY                      10.666666666666666
-pfset ComputationalGrid.DZ                       1.0
-
-pfset ComputationalGrid.NX                      10
-pfset ComputationalGrid.NY                      10
-pfset ComputationalGrid.NZ                       8
-
-
-set mask [pfload samrai.out.mask.pfb]
-
-set top [pfcomputetop $mask]
-set bottom [pfcomputebottom $mask]
-
-set domain [pfcomputedomain $top $bottom]
-
-set out [pfprintdomain $domain]
-
-set grid\_file [open samrai_grid.tcl w]
-puts $grid_file $out
-close $grid_file
-
-#---------------------------------------------------------
-# The resulting TCL file samrai_grid.tcl may be read into
-# a Parflow input file using ``source samrai_grid.tcl''.
-#---------------------------------------------------------
-\end{verbatim}
-
-\item{\begin{verbatim}pfprintdomain domain\end{verbatim}} This command
- creates a set of TCL commands that setup a domain as specified by the
- provided domain input which can be then be written to a file for
- inclusion in a Parflow input script.  Note that this kind of domain
- is only supported by the SAMRAI version of Parflow.
-
-\item{\begin{verbatim}pfextract2Ddomain domain\end{verbatim}} This
- command builds a 2D domain based off a 3D domain.  This can be used
- for a pfdistondomain command for Parflow 2D data (such as slopes and
- soil indices).
-
-\item{\begin{verbatim}pfflux conductivity hhead\end{verbatim}}
-This command computes the net Darcy flux at vertices for the
-conductivity data set `conductivity' and the hydraulic head data      
-set given by `hhead'.  An identifier representing the flux computed   
-will be returned upon successful completion.
-
-
-\item{\begin{verbatim}pfextracttop top data\end{verbatim}} 
-This command computes the the top of the domain based on the top of the
- domain and another dataset.  The identifier of the data set created
- by this operation is returned upon successful completion.
-
-        
-\item{\begin{verbatim}pfgetelt dataset i j k\end{verbatim}}
-This command returns the value at element (i,j,k) in data set         
-`dataset'.  The i, j, and k above must range from 0 to (nx - 1), 0 to 
-(ny - 1), and 0 to (nz - 1) respectively.  The values nx, ny, and nz
-are the number of grid points along the x, y, and z axes respectively.
-The string `dataset' is an identifier representing the data set whose
-element is to be retrieved.
-        
-
-\item{\begin{verbatim}pfgetgrid dataset\end{verbatim}}
-This command returns a description of the grid which serves as the
-domain of data set `dataset'.  The format of the description is given 
-below.
-\begin{itemize}
-\item{\begin{verbatim}(nx, ny, nz)\end{verbatim}
-The number of coordinates in each direction.}
-\item{\begin{verbatim}(x, y, z)\end{verbatim}The origin of the grid.}
-\item{\begin{verbatim}(dx, dy, dz)\end{verbatim}The distance between each
-coordinate in each direction.}
-\end{itemize}
-The above information is returned in the following Tcl list format:
-{nx ny nz} {x y z} {dx dy dz}
-       
-
-\item{\begin{verbatim}pfgridtype gridtype\end{verbatim}}
-This command sets the grid type to either cell centered if `gridtype'
-is set to `cell' or vetex centered if `gridtype' is set to `vertex'.
-If no new value for `gridtype' is given, then the current value of
-`gridtype' is returned.  The value of `gridtype' will be returned upon
-successful completion of this command.
-
-
-\item{\begin{verbatim}pfhhead phead\end{verbatim}}
-This command computes the hydraulic head from the pressure head       
-represented by the identifier `phead'.  An identifier for the 
-hydraulic head computed is returned upon successful completion.
-
-
-\item{\begin{verbatim}pflistdata dataset\end{verbatim}}
-This command returns a list of pairs if no argument is given.  The
-first item in each pair will be an identifier representing the data   
-set and the second item will be that data set's label.  If a data     
-set's identifier is given as an argument, then just that data set's   
-name and label will be returned.
-       
-
-\item{\begin{verbatim}pfload [file format] filename\end{verbatim}}
-Loads a dataset into memory so it can be manipulated using the other
-utilities.  A file format may preceed the filename in order to
-indicate the file's format.  If no file type option is given, then the
-extension of the filename is used to determine the default file type.
-An identifier used to represent the data set will be returned upon
-successful completion.
-
-      File type options include:
-\begin{itemize}
-\item{\begin{verbatim}pfb\end{verbatim}} ParFlow binary format.  
-Default file type for files with a `.pfb' extension.
-\item{\begin{verbatim}pfsb\end{verbatim}}  ParFlow scattered binary format.
-Default file type for files with a `.pfsb' extension.
-\item{\begin{verbatim}sa\end{verbatim}}  ParFlow simple ASCII format.
-Default file type for files with a `.sa' extension.
-\item{\begin{verbatim}sb\end{verbatim}} ParFlow simple binary format.
-Default file type for files with a `.sb' extension.
-\item{\begin{verbatim}silo\end{verbatim}} Silo binary format.
-Default file type for files with a `.silo' extension.
-\item{\begin{verbatim}rsa\end{verbatim}} ParFlow real scattered ASCII format.
-Default file type for files with a `.rsa' extension
-\end{itemize}
-      
-
-\item{\begin{verbatim}pfloadsds filename dsnum\end{verbatim}}
-This command is used to load Scientific Data Sets from HDF files.    
-The SDS number `dsnum' will be used to find the SDS you wish to load
-from the HDF file `filename'.  The data set loaded into memory will
-be assigned an identifier which will be used to refer to the data set
-until it is deleted.  This identifier will be returned upon
-successful completion of the command.  
-        
-
-\item{\begin{verbatim}pfmdiff datasetp datasetq digits [zero]\end{verbatim}}
-If `digits' is greater than or equal to zero, then this command     
-computes the grid point at which the number of digits in agreement    
-(significant digits) is fewest and differs by more than `digits'    
-significant digits.  If `digits' is less than zero, then the point  
-at which the number of digits in agreement (significant digits) is    
-minimum is computed.  Finally, the maximum absolute difference is     
-computed.  The above information is returned in a Tcl list
-of the following form:
-{mi mj mk sd} adiff
-   
-Given the search criteria, (mi, mj, mk) is the coordinate where the
-minimum number of significant digits `sd' was found and `adiff' is
-the maximum absolute difference.        
-        
-        
-\item{\begin{verbatim}pfnewdata {nx ny nz} {x y z} {dx dy dz} label\end{verbatim}}
-This command creates a new data set whose dimension is described by
-the lists {nx ny nz}, {x y z}, and {dx dy dz}.  The first list,
-describes the dimensions, the second indicates the origin, and the
-third gives the length intervals between each coordinate along each
-axis.  The `label' argument will be the label of the data set that
-gets created.  This new data set that is created will have all of
-its data points set to zero automatically.  An identifier for the new
-data set will be returned upon successful completion.
-
-
-\item{\begin{verbatim}pfnewlabel dataset newlabel\end{verbatim}}
-This command changes the label of the data set `dataset' to
-`newlabel'.
- 
-
-\item{\begin{verbatim}pfphead hhead\end{verbatim}}
-This command computes the pressure head from the hydraulic head   
-represented by the identifier `hhead'.  An identifier for the pressure
-head is returned upon successful completion.
-        
-
-\item{\begin{verbatim}pfsavediff datasetp datasetq digits [zero] -file filename
-\end{verbatim}}
-This command saves to a file the differences between the values
-of the data sets represented by `datasetp' and `datasetq' to file
-`filename'.  The data points whose values differ in more than         
-`digits' significant digits and whose differences are greater than  
-`zero' will be saved.  Also, given the above criteria, the
-minimum number of digits in agreement (significant digits) will be    
-saved.
-
-If `digits' is less than zero, then only the minimum number of
-significant digits and the coordinate where the minimum was
-computed will be saved.
-
-In each of the above cases, the maximum absolute difference given
-the criteria will also be saved.
-
-
-\item{\begin{verbatim}pfsave dataset -filetype filename\end{verbatim}}
-This command is used to save the data set given by the identifier
-`dataset' to a file `filename' of type `filetype' in one of the
-ParFlow formats below.
-
-File type options include:
-\begin{itemize}
-\item{pfb}  ParFlow binary format.
-\item{sa}  ParFlow simple ASCII format.
-\item{sb}  ParFlow simple binary format.
-\item{silo} Silo binary format.
-\item{vis}  Vizamrai binary format.
-\end{itemize}
-
-
-\item{\begin{verbatim}pfsavesds dataset -filetype filename\end{verbatim}}
-This command is used to save the data set represented by the
-identifier `dataset' to the file `filename' in the format given by    
-`filetype'.  
-
-The possible HDF formats are:
-\begin{itemize}
-\item{-float32}
-\item{-float64}
-\item{-int8}
-\item{-uint8}
-\item{-int16}
-\item{-uint16}
-\item{-int32}
-\item{-uint32}
-\end{itemize}
-
-       
-\item{\begin{verbatim}pfsetgrid {nx ny nz} {x0 y0 z0} {dx dy dz} dataset\end{verbatim}}
-This command replaces the grid information of dataset with the values provided. 
-
-
-\item{\begin{verbatim}pfslopex dem\end{verbatim}}
-This command computes slopes in the x-direction using 1st order upwind
-finite differences based on the digital elevation model dem. Slopes at local 
-maxima (in x-direction) are calculated as the maximum downward gradient to 
-an adjacent neighbor. Slopes at local minima (in x-direction) do not drain in 
-the x-direction and are therefore set to zero. Note that dem must be a 
-ParFlow dataset and must have the correct grid information -- dx in particular
-is used in slope calculations. If gridded elevation values are read from a text 
-file (e.g., using pfload's simple ascii format), grid inforamtion must be 
-specified using the pfsetgrid command. 
-
-
-\item{\begin{verbatim}pfslopey dem\end{verbatim}}
-This command computes slopes in the y-direction using 1st order upwind 
-finite differences based on the digital elevation model dem. Slopes at local 
-maxima (in y-direction) are calculated as the maximum downward gradient to 
-an adjacent neighbor. Slopes at local minima (in y-direction) do not drain in
-the y-direction and are therefore set to zero. Note that dem must be a 
-ParFlow dataset and must have the correct grid information - dy in particular 
-is used in slope calculations. If gridded elevation values are read in from a 
-text file (e.g., using pfload's simple ascii format), grid information must be
-specified using the pfsetgrid command. 
-
-
-\item{\begin{verbatim}pfslopeD8 dem\end{verbatim}}
-This command computes slopes according to the eight-point pour method (commonly
-referred to as the D8 method) based on the digital elevation model dem. Slopes 
-are computed as the maximum downward gradient between a given cell and it's lowest 
-neighbor (adjacent or diagonal). Local minima are set to zero; where local minima 
-occur on the edge of the domain, the 1st order upwind slope is used (i.e., the cell 
-is assumed to drain out of the domain). Note that dem must be a ParFlow dataset and
-must have the correct grid information -- dx and dy both used in slope calculations.
-If gridded elevation values are read in from a text file (e.g., using pfload's simple 
-ascii format), grid information must be specified using the pfsetgrid command. It should be noted that ParFlow uses slopex and slopey (NOT D8 slopes!) in runoff calculations.
-
-
-\item{\begin{verbatim}pfpitfilldem dem dpit maxiter \end{verbatim}}
-This command fills sinks in the digital elevation model dem by a standard iterative 
-pit-filling routine. Sinks are identified as cells with zero slope in both x- and 
-y-directions, or as local minima in elevation (i.e., all adjacent neighbors have 
-higher elevations). At each iteration, the value dpit is added to all remaining 
-sinks. The procedure continues iteratively until all sinks are filled or the number
-of iterations reaches maxiter. For most applications, sinks should be filled prior
-to computing slopes (i.e., prior to executing pfslopex and pfslopey).
-
-
-\item{\begin{verbatim}pfflintslaw dem c p\end{verbatim}}
-This command smooths the digital elevation model dem according to Flints Law, with
-Flints Law parameters specified by c and p, respectively. Flints Law relates the 
-slope magnitude at a given cell to its upstream contributing area: S = c*A**p. In 
-this routine, elevations at local minima retain the same value as in the original 
-dem. Elevations at all other cells are computed by applying Flints Law recursively 
-up each drainage path, starting at its terminus (a local minimum) until a drainage 
-divide is reached. Elevations are computed as: 
-
-dem[i,j] = dem[child] + c*(A[i,j]**p)*ds[i,j]
-
-where child is the D8 child of [i,j] (i.e., the cell to which [i,j] drains according
-to the D8 method); ds[i,j] is the segment length between the [i,j] and its child; 
-A[i,j] is the upstream contributing area of [i,j]; and c and p are constants.
-
-
-\item{\begin{verbatim}pfflintslawfit dem c0 p0 maxiter\end{verbatim}}
-This command fits Flint's Law parameters c and p for the provided digital elevation 
-model dem using the iterative Levenberg-Marquardt method of non-linear least squares 
-minimization. The user must provide initial estimates of c0 and p0; results are not
-sensitive to these initial values. The user must also specify the maximum number of 
-iterations as maxiter. Final values of c and p are printed to the screen, and a 
-dataset containing smoothed elevation values is returned. Smoothed elevations are 
-identical to running pfflintslaw for the final values of c and p. Note that dem 
-must be a ParFlow dataset and must have the correct grid information -- dx, dy, nx, 
-and ny are used in parameter estimation and Flint's Law calculations. If gridded 
-elevation values are read in from a text file (e.g., using pfload's simple ascii 
-format), grid information must be specified using the pfsetgrid command. 
-
-
-\item{\begin{verbatim}pfmovingaveragedem dem wsize maxiter \end{verbatim}}
-This command fills sinks in the digital elevation model dem by a standard iterative
-moving-average routine. Sinks are identified as cells with zero slope in both x- and
-y-directions, or as local minima in elevation (i.e., all adjacent cells have higher 
-elevations). At each iteration, a moving average is taken over a window of width
-wsize around each remaining sink; sinks are thus filled by averaging over neighboring
-cells. The procedure continues iteratively until all sinks are filled or the number 
-of iterations reaches maxiter. For most applications, sinks should be filled prior
-to computing slopes (i.e., prior to executing pfslopex and pfslopey). 
-
-\item{\begin{verbatim}pfstats dataset\end{verbatim}}
-This command prints various statistics for the data set represented by
-the identifier `dataset'.  The minimum, maximum, mean, sum, variance,
-and standard deviation are all computed.  The above values are
-returned in a list of the following form:
-{min max mean sum variance (standard deviation)}
-
-
-\item{\begin{verbatim}pfsubsurfacestorage mask porosity pressure saturation specific_storage\end{verbatim}}
-This command computes the sub-surface water storage (compressible and incompressible components) based on mask, porosity, saturation, storativity and pressure fields. The equations used to calculate this quantity are given in \S~\ref{Water Balance}. The identifier  
-of the data set created by this operation is returned upon successful 
-completion.  
-
-
-\item{\begin{verbatim}pfsum dataset\end{verbatim}}
-This command computes the sum over the domain of the dataset.
-
-
-\item{\begin{verbatim}pfsurfacerunoff top slope_x slope_y  mannings pressure\end{verbatim}}
-This command computes the surface water runoff (out of the domain) based on a computed top, pressure field, slopes and mannings roughness values. This is integrated along all domain boundaries and is calculated any location that slopes at the edge of the domain point outward.  This data is in units of $[L^3 T^{-1}]$ and the equations used to calculate this quantity are given in \S~\ref{Water Balance}. The identifier  
-of the data set created by this operation is returned upon successful 
-completion.  
-        
-
-\item{\begin{verbatim}pfsurfacestorage top pressure\end{verbatim}}
-This command computes the surface water storage (ponded water on top of the domain) based on a computed top and pressure field. The equations used to calculate this quantity are given in \S~\ref{Water Balance}. The identifier  
-of the data set created by this operation is returned upon successful 
-completion.  
-
-
-\item{\begin{verbatim}pfvmag datasetx datasety datasetz\end{verbatim}}
-This command computes the velocity magnitude when given three velocity
-components.  The three parameters are identifiers which represent
-the x, y, and z components respectively.  The identifier of the data
-set created by this operation is returned upon successful completion.
-
-
-\item{\begin{verbatim}pfvvel conductivity phead\end{verbatim}}
-This command computes the Darcy velocity in cells for the conductivity
-data set represented by the identifier `conductivity' and the pressure
-head data set represented by the identifier `phead'.  The identifier  
-of the data set created by this operation is returned upon successful 
-completion.  
-
-        
-\item{\begin{verbatim}pfprintdata dataset\end{verbatim}}
-This command executes `pfgetgrid' and `pfgetelt' in order to display
-all the elements in the data set represented by the identifier
-`dataset'.
-        
-        
-\item{\begin{verbatim}pfprintdiff datasetp datasetq digits [zero]\end{verbatim}}
-This command executes `pfdiffelt' and `pfmdiff' to print differences
-to standard output.  The differences are printed one per line along
-with the coordinates where they occur.  The last two lines displayed  
-will show the point at which there is a minimum number of significant 
-digits in the difference as well as the maximum absolute difference.
-        
-        
-\item{\begin{verbatim}pfprintgrid dataset\end{verbatim}}
-This command executes pfgetgrid and formats its output before printing
-it on the screen.  The triples (nx, ny, nz), (x, y, z), and
-(dx, dy, dz) are all printed on seperate lines along with labels
-describing each.
-        
-        
-\item{\begin{verbatim}pfprintlist [dataset]\end{verbatim}}
-This command executes pflistdata and formats the output of that
-command.  The formatted output is then printed on the screen.  The
-output consists of a list of data sets and their labels one per line
-if no argument was given or just one data set if an identifier was
-given.
-        
-        
-\item{\begin{verbatim}pfprintmdiff datasetp datasetq digits [zero]\end{verbatim}}
-This command executes `pfmdiff' and formats that command's output
-before displaying it on the screen.  Given the search criteria, a line
-displaying the point at which the difference has the least number of
-significant digits will be displayed.  Another line displaying the
-maximum absolute difference will also be displayed.
- 
-        
-\item{\begin{verbatim}printstats dataset\end{verbatim}}
-This command executes `pfstats' and formats that command's output
-before printing it on the screen.  Each of the values mentioned in the
-description of `pfstats' will be displayed along with a label.
-
-
-\item{\begin{verbatim}pfundist filename, pfundist runname\end{verbatim}}
-The command undistributes a \parflow{} output file.  \parflow{} uses a
-distributed file system where each node can write to its own file.
-The pfundist command takes all of these individual files and collapses
-them into a single file.
-
-The arguments can be a runname or a filename.  If a runname is given
-then all of the output files associated with that run are
-undistributed.
-
-Normally this is done after every pfrun command.
-
-
-\item{\begin{verbatim}pfupstreamarea slope_x slope_y\end{verbatim}}
-This command computes the upstream area contributing to surface runoff
-at each cell based on the x and y slope values provided in datasets 
-\file{slope_x} and \file{slope_y}, respectively. Contributing area is computed recursively
-for each cell; areas are not weighted by slope direction. Areas are returned
-as the number of upstream (contributing) cells; to compute actual area, simply
-multiply by the cell area (dx*dy). 
-
-        
-\end{description}        
-
-\subsection{Common examples using \parflow{} TCL commands (PFTCL) }
-\label{common_pftcl}
-This section contains some brief examples of how to use the pftools commands (along with standard \emph{TCL} commands) to postprocess data.
-
-Load a file as one format and write as another format.
-\begin{verbatim}
-set press [pfload harvey_flow.out.press.pfb]
-pfsave $press -sa harvey_flow.out.sa
-\end{verbatim}
-
-Load pressure-head output from a file, convert to head-potential and write out as a new file.
-\begin{verbatim}
-set press [pfload harvey_flow.out.press.pfb]
-set head [pfhhead $press]
-pfsave $head -pfb harvey_flow.head.pfb
-\end{verbatim}
-
-Use the mask to calculate the top of the domain, save the top of the domain as a file, apply it to the pressure output and write out as a new file.
-\begin{verbatim}
-set mask [pfload clm.out.mask.pfb]
-set top [Parflow::pfcomputetop $mask]
-
-pfsave $top -pfb "clm.out.top_index.pfb"
-
-set data [pfload clm.out.press.00000.pfb]
-set top_data [Parflow::pfextracttop $top $data]
-
-pfsave $top_data -pfb "clm.out.top.press.00000.pfb"
-
-\end{verbatim}
-
-Calculate and output the subsurface storage in the domain at a point in time.
-\begin{verbatim}
-set saturation [pfload runname.out.satur.00001.silo]
-set pressure [pfload runname.out.press.00001.silo]
-set specific_storage [pfload runname.out.specific_storage.silo]
-set porosity         [pfload runname.out.porosity.silo]
-set mask             [pfload runname.out.mask.silo]
-
-set subsurface_storage [pfsubsurfacestorage $mask $porosity \
-     $pressure $saturation $specific_storage]
-set total_subsurface_storage [pfsum $subsurface_storage]
-puts [format "Subsurface storage\t\t\t\t : %.16e" $total_subsurface_storage]
-\end{verbatim}
-
-Calculate and output the surface storage in the domain at a point in time.
-\begin{verbatim}
-set pressure [pfload runname.out.press.00001.silo]
-set mask             [pfload runname.out.mask.silo]
-set top              [pfcomputetop $mask]
-set surface_storage [pfsurfacestorage $top $pressure]
-set total_surface_storage [pfsum $surface_storage]
-puts [format "Surface storage\t\t\t\t : %.16e" $total_surface_storage]
-\end{verbatim}
-
-Calculate and output the runoff out of the domain over a timestep.
-\begin{verbatim}
-set pressure   [pfload runname.out.press.00001.silo]
-set slope_x     [pfload runname.out.slope_x.silo]
-set slope_y    [pfload runname.out.slope_y.silo]
-set mannings  [pfload runname.out.mannings.silo]
-set mask     [pfload runname.out.mask.silo]
-set top       [pfcomputetop $mask]
-
-set surface_runoff [pfsurfacerunoff $top $slope_x $slope_y $mannings $pressure]
-set total_surface_runoff [expr [pfsum $surface_runoff] * [pfget TimeStep.Value]]
-puts [format "Surface runoff from pftools\t\t\t : %.16e" $total_surface_runoff]
-\end{verbatim}
-
-%=============================================================================
 %=============================================================================
 
 \section{Directory of Test Cases}
@@ -873,9 +361,9 @@ as templates in making new files and for use in testing the code.  These files s
 
 \begin{description}
 
-\item{\file{crater2D.tcl} An example of a two-dimensional, variably-saturated crater infiltration prblem with time-varying boundary conditions.  It uses the solid file \file{crater2D.pfsol.}}
+\item{\file{crater2D.tcl} An example of a two-dimensional, variably-saturated crater infiltration problem with time-varying boundary conditions.  It uses the solid file \file{crater2D.pfsol.}}
 
-\item{\file{default_richards.tcl} The default variably-saturated Richards’ Equation simulation test script.}
+\item{\file{default_richards.tcl} The default variably-saturated Richards' Equation simulation test script.}
 
 \item{\file{default_single.tcl} The default parflow, single-processor, fully-saturated test script.}
 
@@ -885,44 +373,78 @@ as templates in making new files and for use in testing the code.  These files s
 
 \item{\file{default_overland.tcl} An overland flow boundary condition test and example script based loosely on the V-catchment problem in \cite{KM06}.  There are options provided to expand this problem into other overland flow-type, transient boundary-type problems included in the file as well.}
 
+\item{\file{LW_var_dz_spinup.tcl} An example that uses the Little Washita domain to demonstrate a steady-state spinup initialization using P-E forcing. It also demonstrates the variable dz keys.}
+
+\item{\file {LW_var_dz.tcl} An example that uses the Little Washita domain to demonstrate surface flow network development.  It also uses the variable dz keys.}
+
+\item{\file {Evap_Trans_test.tcl} An example that modifies the \file{default_overland.tcl} to demonstrate steady-state external flux \file{.pfb} files.}
+
+\item{\file {overland_flux.tcl} An example that modifies the \file{default_overland.tcl} to demonstrate transient external flux \file{.pfb} files.}
+
 \item{\file{/clm/clm.tcl} An example of how to use \parflow{} coupled to {\file{clm}}.  This directory also includes {\file{clm}}-specific input. Note: this problem will only run if {\file{--with-clm}} flag is used during the configure and build process.}
 
 \item{\file{water_balance_x.tcl} and {\file{water_balance_y.tcl}}. An overland flow example script that uses the water-balance routines integrated into {\file{pftools}}.  These two problems are based on simple overland flow conditions with slopes primarily in the x or y-directions.  Note: this problem only will run if the Silo file capability is used, that is a {\file{--with-silo=PATH}} flag is used during the configure and build process.}
 
 \item{\file{pfmg.tcl} and \file{pfmg_octree.tcl}. Tests of the external \emph{Hypre} preconditioner options.  Note: this problem only will run if the \emph{Hypre} capability is used, that is a {\file{--with-hypre=PATH}} flag is used during the configure and build process.}
 
-\item{\file{pfmg.tcl} and \file{pfmg_octree.tcl}. Tests of the external \emph{Hypre} preconditioner options.  Note: this problem only will run if the \emph{Hypre} capability is used, that is a {\file{--with-hypre=PATH}} flag is used during the configure and build process.}
-
 \item{\file{test_x.tcl} A test problem for the Richards' solver that compares output to an analytical solution.}
+
+\item{\file{/washita/tcl_scripts/LW_Test.tcl} A three day simulation of the Little Washita domain using \parflow{} \code{CLM} with 3D forcings. }
 
 \end{description}
 
 %=============================================================================
 %=============================================================================
 
-\section{Annotated Input Script}
+\section{Annotated Input Scripts}
 \label{Tutorial}
 
-This tutorial matches the \file{harvey_flow.tcl} file found in the \file{/test} directory.  This example is directly from \cite{MWH07}.  This example demonstrates how to set up and run a fully saturated flow problem with heterogeneous hydraulic conductivity.  Given statistical parameters describing the geology of your site, this script can be easily modified to make as many realizations of the subsurface as you like, each different and yet having the same statistical parameters, useful for a Monte Carlo simulation.
+This section contains two annotated input scripts:
 
-To run \parflow{}, you use a script written in Tcl/TK.  This script has a lot of flexibility, as it is somewhere in between a program and a user interface.  The tcl script gives \parflow{} the data it requires (or tells \parflow{} where to find or read in that data) and also tells \parflow{} to run.
+\begin{itemize}
+	\item \S~\ref{Harvey Flow Example} contains the harvey flow example (\file{harvey.flow.tcl})
+	which is an idealized domain with a heterogenous subsurface. The example also demonstrates how to generate 
+	multiple realizations of the subsurface and add pumping wells. 
+	 
+	\item \S~\ref{Little Washita Example} contains the Little Washita example (\file{LW_Test.tcl})
+	which simulates a moderately sized (41km by 41km) real domain using \parflow{} \code{CLM}
+	with 3D meteorological forcings.
+	 
+\end{itemize}
 
-As stated above, the tcl script for the Cape Cod simulation is called \file{harvey.flow.tcl}
-
-When the script runs, it creates a new directory named \file{/flow} right in the directory where the tcl script is stored.  \parflow{} then puts all its output in \file{/flow}.  Of course, you can change the name and location of this output directory by modifying the tcl script that runs \parflow{}.
+To run \parflow{}, you use a script written in Tcl/TK.  This script has a lot of flexibility, as it is somewhere in between a program 
+and a user interface.  The tcl script gives \parflow{} the data it requires (or tells \parflow{} where to find or read in that data) 
+and also tells \parflow{} to run.
 
 To run the simulation:
 \begin{enumerate}
 \item{make any modifications to the tcl input script (and give a new name, if you want to)}
 \item{save the tcl script}
-\item{For Windows: double click on it to run \parflow{}}
-\item{For Linux/Unix/OSX: invoke the script from the command line using the tcl-shell, this looks like: \file{>tclsh harvey_flow.tcl}}
-\item{Wait patiently for a small empty square window to appear (Windows) or the command prompt to return (Linux/Unix/OSX) indicating that \parflow{} has finished.  Intermediate files are written as the simulation runs, however there is no other indication that \parflow{} is running.}
+\item{For Linux/Unix/OSX: invoke the script from the command line using the tcl-shell, this looks like: \file{>tclsh filename.tcl}}
+\item{Wait patiently for the command prompt to return (Linux/Unix/OSX) indicating that \parflow{} has finished.  Intermediate files are written as the simulation runs, however there is no other indication that \parflow{} is running.}
 \end{enumerate}
 
-To modify a tcl script, you right-click and select “edit” from the menu.  If you select “open,” you will run the script.
+To modify a tcl script, you right-click and select edit from the menu.  If you select open, you will run the script.
 
-{\bf Note:}  The units for {\bf K} (\i{m/d}, usually) are critical to the entire construction.  These length and time units for {\bf K} set the units for all other variables (input or generated, throughout the entire simulation) in the simulation.  \parflow{} can set to solve using hydraulic conductivity by literally setting density, viscosity and gravity to one (as is done in the script below).  This means the pressure units are in length (meters), so pressure is now so-called pressure-head.
+{\bf Note:}  The units for {\bf K} (\i{m/d}, usually) are critical to the entire construction.  
+These length and time units for {\bf K} set the units for all other variables (input or generated, 
+throughout the entire simulation) in the simulation.  \parflow{} can set to solve using hydraulic 
+conductivity by literally setting density, viscosity and gravity to one (as is done in the script below).  
+This means the pressure units are in length (meters), so pressure is now so-called pressure-head.
+
+%________________________________
+\subsection{Harvey Flow Example}
+\label{Harvey Flow Example}
+
+This tutorial matches the \file{harvey_flow.tcl} file found in the \file{/test} directory.  This example is directly from \cite{MWH07}.  
+This example demonstrates how to set up and run a fully saturated flow problem with heterogeneous hydraulic conductivity using 
+the turning bands approach \cite{TAG89}. Given statistical parameters describing the geology of your site, 
+this script can be easily modified to make as many realizations 
+of the subsurface as you like, each different and yet having the same statistical parameters, useful for a Monte Carlo simulation.  This example
+is the basis for several fully-saturated \parflow{} applications \cite{Siirila12a,Siirila12b,SNSMM10,Atchley13a,Atchley13b,Cui14}.
+
+When the script runs, it creates a new directory named \file{/flow} right in the directory where the tcl script is stored.  \parflow{} then puts all its output in \file{/flow}.  Of course, you can change the name and location of this output directory by modifying the tcl script that runs \parflow{}.
+
 
 Now for the tcl script:
 
@@ -932,7 +454,7 @@ Now for the tcl script:
 #
 \end{verbatim}
 
-These first three lines are what link Parflow and the tcl script, thus allowing you to use a set of commands seen later, such as “pfset,” etc.
+These first three lines are what link \parflow{} and the tcl script, thus allowing you to use a set of commands seen later, such as \code{pfset}, etc.
 
 \begin{verbatim}
 lappend auto_path $env(PARFLOW_DIR)/bin 
@@ -945,7 +467,8 @@ namespace import Parflow::*
 pfset FileVersion 4
 \end{verbatim}
 
-These next lines set the parallel process topology.  The domain is divided in x,y and z by P, Q and R.  The total number of processors is P*Q*R.
+These next lines set the parallel process topology.  The domain is divided in \emph{x},\emph{y} and \emph{z} by \code{P}, \code{Q} and \code{R}.
+The total number of processors is \code{P*Q*R}  (\emph{see} \S~\ref{Computing Topology}).
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -957,7 +480,7 @@ pfset Process.Topology.Q     1
 pfset Process.Topology.R     1
 \end{verbatim}
 
-Next we set up the computational grid (\emph{see} \S~\ref{Defining the Problem}).
+Next we set up the computational grid (\emph{see} \S~\ref{Defining the Problem} and  \S~\ref{Computational Grid}).
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -989,7 +512,10 @@ pfset ComputationalGrid.NY      30
 pfset ComputationalGrid.NZ      100
 \end{verbatim}
 
-This next piece is comparable to a pre-declaration of variables.  These will be areas in our domain geometry.  The regions themselves will be defined later.  You must always have one that is the name of your entire domain.  If you want subsections within your domain, you may declare these as well.  For Cape Cod, we have the entire domain, and also the 2 (upper and lower) permeability zones in the aquifer.
+This next piece is comparable to a pre-declaration of variables.  These will be areas in our domain geometry. 
+The regions themselves will be defined later.  You must always have one that is the name of your entire domain.  
+If you want subsections within your domain, you may declare these as well.  For Cape Cod, we have the entire domain,
+and also the 2 (upper and lower) permeability zones in the aquifer.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -998,7 +524,8 @@ This next piece is comparable to a pre-declaration of variables.  These will be 
 pfset GeomInput.Names "domain_input upper_aquifer_input lower_aquifer_input"
 \end{verbatim}
 
-Now you characterize your domain that you just pre-declared to be a “box” – (\emph{see} \S~\ref{Geometries}), and you also give it a name, “domain.”
+Now you characterize your domain that you just pre-declared to be a \code{box} (\emph{see} \S~\ref{Geometries}),
+and you also give it a name, \code{domain}.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1008,7 +535,11 @@ pfset GeomInput.domain_input.InputType       Box
 pfset GeomInput.domain_input.GeomName   domain
 \end{verbatim}
 
-Here, you set the limits in space for your entire domain.  The span from \file{Lower.X} to \file{Upper.X} will be equal to the product of \file{ComputationalGrid.DX} times \file{ComputationalGrid.NX}.  Same for {\em Y} and {\em Z} (i.e. the number of grid elements times size of the grid element has to equal the size of the grid in each dimension).   The “Patches” command assigns names to the outside edges, because the domain is the limit of the problem in space.
+Here, you set the limits in space for your entire domain.  The span from \file{Lower.X} to \file{Upper.X} 
+will be equal to the product of \file{ComputationalGrid.DX} times \file{ComputationalGrid.NX}.  
+Same for {\em Y} and {\em Z} (i.e. the number of grid elements times size of the grid element has to
+equal the size of the grid in each dimension).   The \code{Patches} key assigns names to the outside edges, 
+because the domain is the limit of the problem in space.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1025,7 +556,9 @@ pfset Geom.domain.Upper.Z       3.8
 pfset Geom.domain.Patches "left right front back bottom top"
 \end{verbatim}
 
-Just like domain geometry, you also set the limits in space for the individual components (upper and lower, as defined in the Names of GeomInputs pre-declaration).  There are no patches for these geometries as they are internal to the domain.
+Just like domain geometry, you also set the limits in space for the individual components 
+(upper and lower, as defined in the Names of GeomInputs pre-declaration).  There are no patches 
+for these geometries as they are internal to the domain.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1063,7 +596,9 @@ pfset Geom.lower_aquifer.Upper.Y     10.2
 pfset Geom.lower_aquifer.Upper.Z      1.5
 \end{verbatim}
 
-Now you add permeability data to the domain sections defined above (\S~\ref{Permeability}).  You can reassign values simply by re-stating them -- there is no need to comment out or delete the previous version -- the final statement is the only one that counts.
+Now you add permeability data to the domain sections defined above (\S~\ref{Permeability}).  
+You can reassign values simply by re-stating them -- there is no need to comment out or 
+delete the previous version -- the final statement is the only one that counts.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1077,14 +612,24 @@ Name the permeability regions you will describe.
 pfset Geom.Perm.Names "upper_aquifer lower_aquifer"
 \end{verbatim}
 
-You can set, for example homogeneous, constant permeability, or you can generate a random field that meets your statistical requirements.  To define a constant permeability for the entire domain:
+You can set, for example homogeneous, constant permeability, or you can generate a random 
+field that meets your statistical requirements.  To define a constant permeability for the entire domain:
 
 \begin{verbatim}
 #pfset Geom.domain.Perm.Type     Constant
 #pfset Geom.domain.Perm.Value    4.0
 \end{verbatim}
 
-However, for Cape Cod, we didn’t want a constant permeability field, so we instead generated a random permeability field meeting our statistical parameters for each the upper and lower zones.  Third from the bottom is the “Seed.”  This is a random starting point to generate the K field.  Pick any large {\em ODD} number.  First we do something tricky with { \file Tcl/TK}.  We use the native commands within tcl to open a text file and read in locally set variables.  Note we use set here and not pfset.  One is a native tcl command, the other a \parflow{}-specific command.  For this problem, we are linking the parameter estimation code, PEST to \parflow{}.  PEST writes out the ascii file stats4.txt (also located in the /test directory) as the result of a calibration run.  Since we are not coupled to PEST in this example, we just read in the file and use the values to assign statistical properties.
+However, for Cape Cod, we did not want a constant permeability field, so we instead generated a 
+random permeability field meeting our statistical parameters for each the upper and lower zones.  
+Third from the bottom is the \code{Seed}.  This is a random starting point to generate the K field.  
+Pick any large {\em ODD} number.  First we do something tricky with { \file Tcl/TK}. 
+We use the native commands within tcl to open a text file and read in locally set variables. 
+Note we use set here and not pfset.  One is a native tcl command, the other a \parflow{}-specific command.  
+For this problem, we are linking the parameter estimation code, PEST to \parflow{}. 
+PEST writes out the ascii file \file{stats4.txt} (also located in the \file{/test} directory) 
+as the result of a calibration run.  Since we are not coupled to PEST in this example, 
+we just read in the file and use the values to assign statistical properties.
 
 \begin{verbatim}
 # we open a file, in this case from PEST to set upper and lower # kg and sigma
@@ -1097,7 +642,9 @@ set varl [gets $fileId]
 close $fileId
 \end{verbatim}
 
-Now we set the heterogeneous parameters for the Upper and Lower aquifers (\emph{see} \S~\ref{Permeability}).  Note the special section at the very end of this block where we reset the geometric mean and standard deviation to our values we read in from a file.  {\bf Note:} \parflow{} uses {\em Standard Deviation} not {\em Variance}.
+Now we set the heterogeneous parameters for the Upper and Lower aquifers (\emph{see} \S~\ref{Permeability}).  
+Note the special section at the very end of this block where we reset the geometric mean and standard 
+deviation to our values we read in from a file.  {\bf Note:} \parflow{} uses {\em Standard Deviation} not {\em Variance}.
 
 \begin{verbatim}
 pfset Geom.upper_aquifer.Perm.Type "TurnBands"
@@ -1140,7 +687,8 @@ pfset Geom.lower_aquifer.Perm.GeomMean  $kgl
 pfset Geom.lower_aquifer.Perm.Sigma  $varl
 \end{verbatim}
 
-The following section allows you to specify the permeability tensor.  In the case below, permeability is symmetric in all directions (x, y, and z) and therefore each is set to 1.0.
+The following section allows you to specify the permeability tensor.  
+In the case below, permeability is symmetric in all directions (x, y, and z) and therefore each is set to 1.0.
 
 \begin{verbatim}
 pfset Perm.TensorType               TensorByGeom
@@ -1166,7 +714,12 @@ pfset SpecificStorage.GeomNames       ""
 pfset Geom.domain.SpecificStorage.Value 1.0e-4
 \end{verbatim}
 
-\parflow{} has the capability to deal with a multiphase system, but we only have one (water) at Cape Cod.  As we stated earlier, we set density and viscosity artificially (and later gravity) both to 1.0.  Again, this is merely a trick to solve for hydraulic conductivity and pressure head.  If you were to set density and viscosity to their true values, the code would calculate {\bf k} (permeability).  By using the “normalized” values instead, you effectively imbed the conversion of {\bf k} to {\bf K} (hydraulic conductivity).  So this way, we get hydraulic conductivity, which is what we want for this problem.
+\parflow{} has the capability to deal with a multiphase system, but we only have one (water) at Cape Cod. 
+As we stated earlier, we set density and viscosity artificially (and later gravity) both to 1.0.  
+Again, this is merely a trick to solve for hydraulic conductivity and pressure head.  
+If you were to set density and viscosity to their true values, the code would calculate {\bf k} (permeability). 
+By using the \emph{normalized} values instead, you effectively embed the conversion of {\bf k} to {\bf K} (hydraulic conductivity). 
+So this way, we get hydraulic conductivity, which is what we want for this problem.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1182,7 +735,8 @@ pfset Phase.water.Viscosity.Type	Constant
 pfset Phase.water.Viscosity.Value	1.0
 \end{verbatim}
 
-We will not use the \parflow{} grid based transport scheme.  We will then leave contaminants blank because we will use a different code for to model (virus, tracer) contamination.
+We will not use the \parflow{} grid based transport scheme.  We will then leave 
+contaminants blank because we will use a different code to model (virus, tracer) contamination.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1191,7 +745,9 @@ We will not use the \parflow{} grid based transport scheme.  We will then leave 
 pfset Contaminants.Names			""
 \end{verbatim}
 
-As with density and viscosity, gravity is normalized here.  If we used the true value (in the \emph{[L]} and \emph{[T]} units of hydraulic conductivity) the code would be calculating permeability.  Instead, we normalize so that the code calculates hydraulic conductivity.
+As with density and viscosity, gravity is normalized here.  If we used the true value
+(in the \emph{[L]} and \emph{[T]} units of hydraulic conductivity) the code would be calculating permeability.  
+Instead, we normalize so that the code calculates hydraulic conductivity.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1205,7 +761,8 @@ pfset Gravity				1.0
 #----------------------------------------------------------------------------
 \end{verbatim}
 
-This basic time unit of 1.0 is used for transient boundary and well conditions.  We are not using those features in this example.
+This basic time unit of 1.0 is used for transient boundary and well conditions. 
+We are not using those features in this example.
 
 \begin{verbatim} 
 pfset TimingInfo.BaseUnit		1.0
@@ -1219,7 +776,8 @@ pfset TimingInfo.StartTime     0.0
 pfset TimingInfo.StopTime     0.0
 \end{verbatim}
 
-Set the “dump interval” to -1 to report info at the end of every calculation, which in this case is only when steady state has been reached.
+Set the \code{dump interval} to -1 to report info at the end of every calculation, 
+which in this case is only when steady state has been reached.
 
 \begin{verbatim}
 pfset TimingInfo.DumpInterval	       -1
@@ -1238,7 +796,8 @@ pfset Geom.domain.Porosity.Type    Constant
 pfset Geom.domain.Porosity.Value   0.390
 \end{verbatim}
 
-Having defined the geometry of our problem before and named it “domain”, we’re now ready to report/upload that problem, which we do here.
+Having defined the geometry of our problem before and named it \code{domain}, we are
+now ready to report/upload that problem, which we do here.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1257,7 +816,13 @@ pfset Phase.water.Mobility.Type        Constant
 pfset Phase.water.Mobility.Value       1.0
 \end{verbatim}
 
-Again, \parflow{} has more capabilities that we are using for Cape Cod.  We will deal with our monitoring wells in a separate code as we assume the do not remove a significant amount of water from the domain.  Note that since there are no well names listed here, \parflow{} assumes we have no wells.  If we had pumping wells, we would have to include them here, because they would affect the head distribution throughout our domain.
+Again, \parflow{} has more capabilities than we are using here in the Cape Cod example. 
+For this example, we handle monitoring wells in a separate code as we assume they
+do not remove a significant amount of water from the domain.  Note that since 
+there are no well names listed here, \parflow{} assumes we have no wells. 
+If we had pumping wells, we would have to include them here, because they 
+would affect the head distribution throughout our domain.  See below for an example of how to 
+include pumping wells in this script.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1266,7 +831,11 @@ Again, \parflow{} has more capabilities that we are using for Cape Cod.  We will
 pfset Wells.Names ""
 \end{verbatim}
 
-You can give certain periods of time names if you want to (ie. Pre-injection, post-injection, etc).  Here, however we do not have multiple time intervals and are simulating in steady state, so time cycle keys are simple.  We have only one time cycle and it’s constant for the duration of the simulation.  We accomplish this by giving it a repeat value of -1, which repeats indefinitely.  The length of the cycle is the length specified below (an integer) multiplied by the base unit value we specified earlier.
+You can give certain periods of time names if you want to (ie. Pre-injection, post-injection, etc).  
+Here, however we do not have multiple time intervals and are simulating in steady state, so time cycle 
+keys are simple.  We have only one time cycle and it's constant for the duration of the simulation. 
+We accomplish this by giving it a repeat value of -1, which repeats indefinitely.  The length of 
+the cycle is the length specified below (an integer) multiplied by the base unit value we specified earlier.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1278,13 +847,18 @@ pfset Cycle.constant.alltime.Length	 1
 pfset Cycle.constant.Repeat		-1
 \end{verbatim}
 
-Now, we assign Boundary Conditions for each face (each of the Patches in the domain defined before).  Recall the previously stated Patches and associate them with the boundary conditions that follow.
+Now, we assign Boundary Conditions for each face (each of the Patches in the domain defined before).  
+Recall the previously stated Patches and associate them with the boundary conditions that follow.
 
 \begin{verbatim}
 pfset BCPressure.PatchNames "left right front back bottom top"
 \end{verbatim}
 
-These are Dirichelet BCs (i.e. constant head over cell so the pressure head is set to hydrostatic-- \emph{see} \S~\ref{Boundary Conditions: Pressure}).  There is no time dependence, so use the “constant” time cycle we defined previously.  “RefGeom” links this to the established domain geometry and tells ParFlow what to use for a datum when calculating hydrostatic head conditions.
+These are Dirichlet BCs (i.e. constant head over cell so the pressure head 
+is set to hydrostatic-- \emph{see} \S~\ref{Boundary Conditions: Pressure}).  
+There is no time dependence, so use the \code{constant} time cycle we defined previously.  
+\code{RefGeom} links this to the established domain geometry and tells \parflow{} 
+what to use for a datum when calculating hydrostatic head conditions.
 
 \begin{verbatim}
 pfset Patch.left.BCPressure.Type          DirEquilRefPatch
@@ -1298,13 +872,16 @@ Reference the current (left) patch to the bottom to define the line of intersect
 pfset Patch.left.BCPressure.RefPatch  bottom
 \end{verbatim}
 
-Set the head permanently to 10.0m.  Pressure-head will of course vary top to bottom because of hydrostatics, but head potential will be constant.
+Set the head permanently to 10.0m.  Pressure-head will of course vary top to bottom because of hydrostatics, 
+but head potential will be constant.
 
 \begin{verbatim}
 pfset Patch.left.BCPressure.alltime.Value  10.0
 \end{verbatim}
 
-Repeat the declarations for the rest of the faces of the domain.  The left to right (\emph{X}) dimension is aligned with the hydraulic gradient.  The difference between the values assigned to right and left divided by the length of the domain corresponds to the correct hydraulic gradient.
+Repeat the declarations for the rest of the faces of the domain.  The left to right (\emph{X}) 
+dimension is aligned with the hydraulic gradient.  The difference between the values assigned to 
+right and left divided by the length of the domain corresponds to the correct hydraulic gradient.
 
 \begin{verbatim}
 pfset Patch.right.BCPressure.Type               DirEquilRefPatch
@@ -1330,7 +907,9 @@ pfset Patch.top.BCPressure.Cycle			"constant"
 pfset Patch.top.BCPressure.alltime.Value		0.0
 \end{verbatim}
 
-Next we define topographic slopes and Mannings \emph{n} values.  These are not used, since we do not solve for overland flow.  However, the keys still need to appear in the input script.
+Next we define topographic slopes and Mannings \emph{n} values. 
+These are not used, since we do not solve for overland flow.  
+However, the keys still need to appear in the input script.
 
 \begin{verbatim}
 #---------------------------------------------------------
@@ -1364,7 +943,8 @@ pfset Mannings.GeomNames ""
 pfset Mannings.Geom.domain.Value 0.
 \end{verbatim}
 
-Phase sources allows you to add sources other than wells and boundaries, but we do not have any so this key is constant, 0.0 over entire domain.
+Phase sources allows you to add sources other than wells and boundaries, but 
+we do not have any so this key is constant, 0.0 over entire domain.
 
 \begin{verbatim}
 #----------------------------------------------------------------------------
@@ -1376,7 +956,7 @@ pfset PhaseSources.water.GeomNames                    domain
 pfset PhaseSources.water.Geom.domain.Value        0.0
 \end{verbatim}
 
-Next we define solver parameters for IMPES.  Since this is the default solver, we do not need a solver key.
+Next we define solver parameters for {\bf IMPES}.  Since this is the default solver, we do not need a solver key.
 
 \begin{verbatim}
 #---------------------------------------------------------
@@ -1406,7 +986,9 @@ pfset Solver.Drop   1E-15
 #---------------------------------------------------------
 \end{verbatim}
 
-Here you set the number of realizations again using a local tcl variable.  We have set only one run but by setting the \file{n_runs} variable to something else we can run more than one realization of hydraulic conductivity. 
+Here you set the number of realizations again using a local tcl variable.  
+We have set only one run but by setting the \file{n_runs} variable to something 
+else we can run more than one realization of hydraulic conductivity. 
 
 \begin{verbatim}
 # this script is setup to run 100 realizations, for testing we just run one
@@ -1414,14 +996,23 @@ Here you set the number of realizations again using a local tcl variable.  We ha
 set n_runs 1
 \end{verbatim}
 
-Here is where you tell \parflow{} where to put the output.  In this case, it’s a directory called flow.  Then you cd (change directory) into that new directory.  If you wanted to put an entire path rather than just a name, you would have more control over where your output file goes.  For example, you would put \file{file mkdir "C:/cape_cod/revised_statistics/flow"} and then change into that directory.  Note that for Windows you must use a DOUBLE backslash in the file path; the single backslash is a control character.
+Here is where you tell \parflow{} where to put the output.  
+In this case, it is a directory called flow.  
+Then you cd (change directory) into that new directory.  
+If you wanted to put an entire path rather than just a name, 
+you would have more control over where your output file goes.  
+For example, you would put \file{file mkdir ``/cape_cod/revised_statistics/flow"} 
+and then change into that directory. 
 
 \begin{verbatim}
 file mkdir "flow"
 cd "flow"
 \end{verbatim}
 
-Now we loop through the realizations, again using tcl.  \file{k} is the integer counter that is incremented for each realization.  When you use a variable (rather than define it), you precede it with\verb+$+.  The hanging character \verb+{+ opens the do loop for \file{k}.
+Now we loop through the realizations, again using tcl.  \file{k} is the
+integer counter that is incremented for each realization.  When you use a variable
+(rather than define it), you precede it with\verb+$+.  The hanging character \verb+{+ 
+opens the do loop for \file{k}.
 
 \begin{verbatim}
 #
@@ -1430,7 +1021,11 @@ Now we loop through the realizations, again using tcl.  \file{k} is the integer 
 for {set k 1} {$k <= $n_runs} {incr k 1} {
 \end{verbatim}
 
-The following expressions sets the variable “seed” equal to the expression in brackets, which increments with each turn of the do loop and each seed will produce a different random field of {\bf K}.  You set upper and lower aquifer, because in the Cape Cod site, these are the two subsets of the domain.  Note the seed starts at a different point to allow for different random field generation for the upper and lower zones.
+The following expressions sets the variable \code{seed} equal to the expression in brackets,
+which increments with each turn of the do loop and each seed will produce a different random field of {\bf K}.  
+You set upper and lower aquifer, because in the Cape Cod site, these are the two subsets of the domain. 
+Note the seed starts at a different point to allow for different random field generation for the upper 
+and lower zones.
 
 \begin{verbatim}
 #
@@ -1440,19 +1035,25 @@ pfset Geom.upper_aquifer.Perm.Seed  [ expr 33333+2*$k ]
 pfset Geom.lower_aquifer.Perm.Seed  [ expr 31313+2*$k ]
 \end{verbatim}
 
-The following command runs ParFlow and gives you a suite of output files for each realization.  The file names will begin \file{harvey_flow.1.xxxxx}, \file{harvey_flow.2.xxxx}, etc up to as many realizations as you run.  The “.xxxxx” part will designate x, y, and z permeability, etc. Recall that in this case, since we normalized gravity, viscosity, and density, remember that we’re really getting hydraulic conductivity.
+The following command runs \parflow{} and gives you a suite of output files for each realization.  
+The file names will begin \file{harvey_flow.1.xxxxx}, \file{harvey_flow.2.xxxx}, etc up to as many realizations as you run.  
+The .xxxxx part will designate x, y, and z permeability, etc. Recall that in this case, since we normalized gravity, viscosity, 
+and density, remember that we are really getting hydraulic conductivity.
 
 \begin{verbatim}
 pfrun harvey_flow.$k
 \end{verbatim}
 
-This command removes a large number of superfluous dummy files.
+This command removes a large number of superfluous dummy files or un-distributes parallel files back into a single file. If you
+compile with the \code{-- with-amps-sequential-io} option then a single \parflow{} file is written with corresponding \file{XXXX.dist} files and the 
+\code{pfundist} command just removes these \file{.dist} files (though you don't really need to remove them if you don't want to).
 
 \begin{verbatim}
 pfundist harvey_flow.$k
 \end{verbatim}
 
-The following commands take advantage of PFTools (\emph{see} \S~\ref{PFTCL Commands}) and load pressure head output of the Parflow model into a pressure matrix.
+The following commands take advantage of PFTools (\emph{see} \S~\ref{PFTCL Commands}) and load pressure head output of the
+/parflow{} model into a pressure matrix.
 
 \begin{verbatim}
 # we use pf tools to convert from pressure to head
@@ -1467,7 +1068,8 @@ The next command takes the pressures that were just loaded and converts it to he
 set head [pfhhead $press]
 \end{verbatim}
 
-Finally, the head matrix is saved as a ParFlow binary file (.pfb) and the k do loop is closed by the \verb+}+ character.  The we move up to the root directory when we are finished
+Finally, the head matrix is saved as a \parflow{} binary file (.pfb) and the k do loop is closed by the \verb+}+ character.  
+Then we move up to the root directory when we are finished
 
 \begin{verbatim}
  pfsave $head -pfb harvey_flow.$k.head.pfb
@@ -1476,7 +1078,12 @@ Finally, the head matrix is saved as a ParFlow binary file (.pfb) and the k do l
 cd ".."
 \end{verbatim}
 
-Once you have modified the tcl input script (if necessary) and run \parflow{}, you will have as many realizations of your subsurface as you specified.  Each of these realizations will be used as input for a particle or streamline calculation in the future.  We can see below, that since we have a tcl script as input, we can do a lot of different operations, for example, we might run a particle tracking transport code simulation using the results of the \parflow{} runs.  This actually corresponds to the example presented in the  user’s manual.
+Once you have modified the tcl input script (if necessary) and run \parflow{}, you will have as
+many realizations of your subsurface as you specified.  Each of these realizations will be used 
+as input for a particle or streamline calculation in the future.  We can see below, that since 
+we have a tcl script as input, we can do a lot of different operations, for example, we might 
+run a particle tracking transport code simulation using the results of the \parflow{} runs.  
+This actually corresponds to the example presented in the \code{SLIM} user's manual.
 
 \begin{verbatim}
 # this could run other tcl scripts now an example is below
@@ -1484,7 +1091,903 @@ Once you have modified the tcl input script (if necessary) and run \parflow{}, y
 #source bromide_trans.sm.tcl
 \end{verbatim}
 
-We could also visualize the results of the \parflow{} simulations, using a number of codes.  For example, if we used chunk to create visual representations of your results, the file \file{harvey_flow.#.out.perm_x.pfb} (where \file{#} is the realization number) will be the “field” of your domain, showing the variation in x-permeability in 3-D space.  You can also generate representations of head or pressure (or y or z permeability) throughout your domain using parflow output files.  See the section on visualization for more details.
+We can add options to this script.  For example if we wanted to add a pumping well these additions
+are described below.
+%==============================
+\subsection*{Adding a Pumping Well}
+
+Let us change the input problem by adding a pumping well:
+\begin{enumerate}
+
+
+\item 
+Add the following lines to the input file near where the existing
+well information is in the input file.  You need to replace
+the ``Wells.Names'' line with the one included here to get both
+wells activated (this value lists the names of the wells):
+
+\begin{display}\begin{verbatim}
+pfset Wells.Names {new_well}
+
+pfset Wells.new_well.InputType                Recirc
+
+pfset Wells.new_well.Cycle		    constant
+
+pfset Wells.new_well.ExtractionType	    Flux
+pfset Wells.new_well.InjectionType            Flux
+
+pfset Wells.new_well.X			    10.0 
+pfset Wells.new_well.Y			    10.0
+pfset Wells.new_well.ExtractionZLower	     0.5
+pfset Wells.new_well.ExtractionZUpper	     0.5
+pfset Wells.new_well.InjectionZLower	     0.2
+pfset Wells.new_well.InjectionZUpper	     0.2
+
+pfset Wells.new_well.ExtractionMethod	    Standard
+pfset Wells.new_well.InjectionMethod          Standard
+
+pfset Wells.new_well.alltime.Extraction.Flux.water.Value        	     0.50
+pfset Wells.new_well.alltime.Injection.Flux.water.Value		     0.75
+
+\end{verbatim}\end{display}
+
+\end{enumerate}
+For more information on defining the problem,
+see \S~\ref{Defining the Problem}.
+
+We could also visualize the results of the \parflow{} simulations, using \emph{VisIt}. 
+For example, we can turn on \emph{SILO} file output which allows these files to be directly
+read and visualized.  We would do this by adding the following \code{pfset} commands, I usually 
+add them to the solver section:
+\begin{display}\begin{verbatim}
+pfset Solver.WriteSiloSubsurfData True
+pfset Solver.WriteSiloPressure True
+pfset Solver.WriteSiloSaturation True
+\end{verbatim}\end{display}
+
+
+You can then directly open the file \file{harvey_flow.#.out.perm_x.silo} (where \file{#} is the realization number).
+The resulting image will be the hydraulic conductivity field of your domain, showing the variation in x-permeability in 3-D space.
+You can also generate representations of head or pressure (or y or z permeability) throughout your domain using \parflow{} output files. 
+See the section on visualization for more details.
+
+%----------------------------------
+\subsection{Little Washita Example}
+\label{Little Washita Example}
+This tutorial matches the \file{LW_Test.tcl} file found in the \file{/test/washita/tcl_scripts} 
+directory and corresponds to \cite{Condon14a, Condon14b}.  This script runs the Little Washita domain for three days using \parflow{} \code{CLM} with 3D forcings. 
+The domain is setup using terrain following grid (\S~\ref{TFG}) and subsurface geologes are specified using a \file{.pfb} indicator file. 
+Input files were generated using the workflow detailed in \S~\ref{Defining a Real domain}. 
+
+Now for the tcl script:
+
+\begin{verbatim}
+#
+# Import the ParFlow TCL package
+#
+\end{verbatim}
+
+These first three lines are what link \parflow{} and the tcl script, thus allowing you to use a set of commands seen later, such as \code{pfset}, etc.
+
+\begin{verbatim}
+lappend auto_path $env(PARFLOW_DIR)/bin 
+package require parflow
+namespace import Parflow::*
+
+#-----------------------------------------------------------------------------
+# File input version number
+#-----------------------------------------------------------------------------
+pfset FileVersion 4
+\end{verbatim}
+
+These next lines set the parallel process topology.  The domain is divided in \emph{x},\emph{y} and \emph{z} by \code{P}, \code{Q} and \code{R}.
+The total number of processors is \code{P*Q*R}  (\emph{see} \S~\ref{Computing Topology}).
+
+\begin{verbatim}
+#----------------------------------------------------------------------------
+# Process Topology
+#----------------------------------------------------------------------------
+
+pfset Process.Topology.P     1
+pfset Process.Topology.Q     1
+pfset Process.Topology.R     1
+\end{verbatim}
+
+Before we really get started make a directory for our outputs and copy all of the required input files into the run directory. 
+These files will be described in detail later as they get used.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Make a directory for the simulation and copy inputs into it
+#-----------------------------------------------------------------------------
+exec mkdir "Outputs"
+cd "./Outputs"
+
+# ParFlow Inputs
+file copy -force "../../parflow_input/LW.slopex.pfb" .
+file copy -force "../../parflow_input/LW.slopey.pfb" .
+file copy -force "../../parflow_input/IndicatorFile_Gleeson.50z.pfb"   .
+file copy -force "../../parflow_input/press.init.pfb"  .
+
+#CLM Inputs
+file copy -force "../../clm_input/drv_clmin.dat" .
+file copy -force "../../clm_input/drv_vegp.dat"  .
+file copy -force "../../clm_input/drv_vegm.alluv.dat"  . 
+
+puts "Files Copied"
+\end{verbatim}
+
+Next we set up the computational grid (\emph{see} \S~\ref{Defining the Problem} and  \S~\ref{Computational Grid}).
+
+\begin{verbatim}
+#----------------------------------------------------------------------------
+# Computational Grid
+#----------------------------------------------------------------------------
+\end{verbatim}
+
+Locate the origin in the domain.
+
+\begin{verbatim}
+pfset ComputationalGrid.Lower.X    0.0
+pfset ComputationalGrid.Lower.Y    0.0
+pfset ComputationalGrid.Lower.Z    0.0
+\end{verbatim}
+
+Define the size of the domain grid block.  Length units, same as those on hydraulic conductivity.
+
+\begin{verbatim}
+pfset ComputationalGrid.DX     1000.0
+pfset ComputationalGrid.DY     1000.0
+pfset ComputationalGrid.DZ     2.0
+\end{verbatim}
+
+Define the number of grid blocks in the domain.
+
+\begin{verbatim}
+pfset ComputationalGrid.NX      41
+pfset ComputationalGrid.NY      41
+pfset ComputationalGrid.NZ      50
+\end{verbatim}
+
+This next piece is comparable to a pre-declaration of variables.  These will be areas in our domain geometry. 
+The regions themselves will be defined later.  You must always have one that is the name of your entire domain.  
+If you want subsections within your domain, you may declare these as well. Here we define two geometries one is the
+domain and one is for the indicator file (which will also span the entire domain).
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# The Names of the GeomInputs
+#-----------------------------------------------------------------------------
+pfset GeomInput.Names                     "box_input indi_input"
+\end{verbatim}
+
+Now you characterize the domain that you just pre-declared to be a \code{box} (\emph{see} \S~\ref{Geometries}),
+and you also give it a name, \code{domain}.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Domain Geometry Input
+#-----------------------------------------------------------------------------
+pfset GeomInput.box_input.InputType      Box
+pfset GeomInput.box_input.GeomName      domain
+\end{verbatim}
+
+Here, you set the limits in space for your entire domain.  The span from \file{Lower.X} to \file{Upper.X} 
+will be equal to the product of \file{ComputationalGrid.DX} times \file{ComputationalGrid.NX}.  
+Same for {\em Y} and {\em Z} (i.e. the number of grid elements times size of the grid element has to
+equal the size of the grid in each dimension).   The \code{Patches} key assigns names to the outside edges, 
+because the domain is the limit of the problem in space.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Domain Geometry 
+#-----------------------------------------------------------------------------
+pfset Geom.domain.Lower.X                        0.0
+pfset Geom.domain.Lower.Y                        0.0
+pfset Geom.domain.Lower.Z                        0.0
+ 
+pfset Geom.domain.Upper.X                        41000.0
+pfset Geom.domain.Upper.Y                        41000.0
+pfset Geom.domain.Upper.Z                          100.0
+
+pfset Geom.domain.Patches             "x-lower x-upper y-lower y-upper z-lower z-upper"
+\end{verbatim}
+
+Now we setup the indicator file. As noted above, the indicator  file has integer values for every grid
+cell in the domain designating what geologic unit it belongs to. The \file{GeomNames} list
+should include a name for every unit in your indicator file. In this example we have thirteen soil
+units and eight geologic units. The \file{FileName} points to the indicator file that \parflow{}
+will read. Recall that this file into the run directory at the start of the script. 
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Indicator Geometry Input
+#-----------------------------------------------------------------------------
+pfset GeomInput.indi_input.InputType      IndicatorField
+pfset GeomInput.indi_input.GeomNames      "s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 g1 g2 g3 g4 g5 g6 g7 g8"
+pfset Geom.indi_input.FileName            "IndicatorFile_Gleeson.50z.pfb"
+\end{verbatim}
+
+For every name in the \file{GeomNames} list we define the corresponding value in the indicator file. 
+For example, here we are saying that our first soil unit (\file{s1}) is represented by the number ``1"
+in the indicator file, while the first geologic unit (\file{g1}) is represented by the number ``21".
+Note that the integers used in the indicator file do not need to be consecutive.
+
+\begin{verbatim}
+pfset GeomInput.s1.Value                1
+pfset GeomInput.s2.Value                2
+pfset GeomInput.s3.Value                3
+pfset GeomInput.s4.Value                4
+pfset GeomInput.s5.Value                5
+pfset GeomInput.s6.Value                6
+pfset GeomInput.s7.Value                7
+pfset GeomInput.s8.Value                8
+pfset GeomInput.s9.Value                9
+pfset GeomInput.s10.Value               10
+pfset GeomInput.s11.Value               11
+pfset GeomInput.s12.Value               12
+pfset GeomInput.s13.Value               13
+pfset GeomInput.g1.Value                21
+pfset GeomInput.g2.Value                22
+pfset GeomInput.g3.Value                23
+pfset GeomInput.g4.Value                24
+pfset GeomInput.g5.Value                25
+pfset GeomInput.g6.Value                26
+pfset GeomInput.g7.Value                27
+pfset GeomInput.g8.Value                28
+\end{verbatim}
+
+Now you add permeability data to the domain sections defined above (\S~\ref{Permeability}).  
+You can reassign values simply by re-stating them -- there is no need to comment out or 
+delete the previous version -- the final statement is the only one that counts. Also, note
+that you do not need to assign permeability values to all of the geometries names. 
+Any geometry that is not assigned its own permeability value will take the \file{domain}
+value. However, every geometry listed in \file{Porosity.GeomNames} must have 
+values assigned. 
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Permeability (values in m/hr)
+#-----------------------------------------------------------------------------
+pfset Geom.Perm.Names                     "domain s1 s2 s3 s4 s5 s6 s7 s8 s9 g2 g3 g6 g8"
+
+pfset Geom.domain.Perm.Type           Constant
+pfset Geom.domain.Perm.Value          0.2
+
+pfset Geom.s1.Perm.Type               Constant
+pfset Geom.s1.Perm.Value              0.269022595
+
+pfset Geom.s2.Perm.Type               Constant
+pfset Geom.s2.Perm.Value              0.043630356
+
+pfset Geom.s3.Perm.Type               Constant
+pfset Geom.s3.Perm.Value              0.015841225
+
+pfset Geom.s4.Perm.Type               Constant
+pfset Geom.s4.Perm.Value              0.007582087
+
+pfset Geom.s5.Perm.Type               Constant
+pfset Geom.s5.Perm.Value              0.01818816
+
+pfset Geom.s6.Perm.Type               Constant
+pfset Geom.s6.Perm.Value              0.005009435
+
+pfset Geom.s7.Perm.Type               Constant
+pfset Geom.s7.Perm.Value              0.005492736
+
+pfset Geom.s8.Perm.Type               Constant
+pfset Geom.s8.Perm.Value              0.004675077
+
+pfset Geom.s9.Perm.Type               Constant
+pfset Geom.s9.Perm.Value              0.003386794
+
+pfset Geom.g2.Perm.Type               Constant
+pfset Geom.g2.Perm.Value              0.025
+
+pfset Geom.g3.Perm.Type               Constant
+pfset Geom.g3.Perm.Value              0.059
+
+pfset Geom.g6.Perm.Type               Constant
+pfset Geom.g6.Perm.Value              0.2
+
+pfset Geom.g8.Perm.Type              Constant
+pfset Geom.g8.Perm.Value             0.68
+\end{verbatim}
+
+The following section allows you to specify the permeability tensor.  
+In the case below, permeability is symmetric in all directions (x, y, and z) and therefore each is set to 1.0.
+Also note that we just specify this once for the whole domain because we want isotropic
+permeability everywhere. You can specify different tensors for different units by repeating 
+these lines with different \file{Geom.Names}.
+
+\begin{verbatim}
+pfset Perm.TensorType                     TensorByGeom
+pfset Geom.Perm.TensorByGeom.Names        "domain"
+pfset Geom.domain.Perm.TensorValX         1.0d0
+pfset Geom.domain.Perm.TensorValY         1.0d0
+pfset Geom.domain.Perm.TensorValZ         1.0d0
+\end{verbatim}
+
+Next we set the specific storage. Here again we specify one value for the whole domain but
+these lines can be easily repeated to set different values for different units. 
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Specific Storage
+#-----------------------------------------------------------------------------
+pfset SpecificStorage.Type                Constant
+pfset SpecificStorage.GeomNames           "domain"
+pfset Geom.domain.SpecificStorage.Value   1.0e-5
+\end{verbatim}
+
+\parflow{} has the capability to deal with a multiphase system, but we only have one (water) in this example. 
+As we stated earlier, we set density and viscosity artificially (and later gravity) both to 1.0.  
+Again, this is merely a trick to solve for hydraulic conductivity and pressure head.  
+If you were to set density and viscosity to their true values, the code would calculate {\bf k} (permeability). 
+By using the \emph{normalized} values instead, you effectively embed the conversion of {\bf k} to {\bf K} (hydraulic conductivity). 
+So this way, we get hydraulic conductivity, which is what we want for this problem.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Phases
+#-----------------------------------------------------------------------------
+pfset Phase.Names                         "water"
+
+pfset Phase.water.Density.Type            Constant
+pfset Phase.water.Density.Value           1.0
+
+pfset Phase.water.Viscosity.Type          Constant
+pfset Phase.water.Viscosity.Value         1.0
+\end{verbatim}
+
+This example does not include the \parflow{} grid based transport scheme.  Therefore we leave 
+contaminants blank.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Contaminants
+#-----------------------------------------------------------------------------
+pfset Contaminants.Names                  ""
+\end{verbatim}
+
+As with density and viscosity, gravity is normalized here.  If we used the true value
+(in the \emph{[L]} and \emph{[T]} units of hydraulic conductivity) the code would be calculating permeability.  
+Instead, we normalize so that the code calculates hydraulic conductivity.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Gravity
+#-----------------------------------------------------------------------------
+pfset Gravity                             1.0
+\end{verbatim}
+
+Next we set up the timing for our simulation.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Timing (time units is set by units of permeability)
+#-----------------------------------------------------------------------------
+\end{verbatim}
+
+This specifies the base unit of time for all time values entered. All time should be expressed
+as multiples of this value. To keep things simple here we set it to 1. Because we expressed
+our permeability in units of m/hr in this example this means that our basin unit of time is 1hr. 
+
+\begin{verbatim}
+pfset TimingInfo.BaseUnit                 1.0
+\end{verbatim}
+
+This key specifies the time step number that will be associated with the first advection cycle
+of the transient problem. Because we are starting from scratch we set this to 0. If we were 
+restarting a run we would set this to the last time step of your previous simulation. Refer to 
+\S~\ref{Restarting a Run} for additional instructions on restarting a run.
+
+\begin{verbatim}
+pfset TimingInfo.StartCount               0.0
+\end{verbatim}
+
+\file{StartTime} and \file{StopTime} specify the start and stop times for the simulation. These 
+values should correspond with the forcing files you are using. 
+
+\begin{verbatim}
+pfset TimingInfo.StartTime                0.0
+pfset TimingInfo.StopTime                 72.0
+\end{verbatim}
+
+This key specifies the timing interval at which \parflow{} time dependent outputs will be written. 
+Here we have a base unit of 1hr so a dump interval of 24 means that we are writing daily outputs. 
+Note that this key only controls the \parflow{} output interval and not the interval that \code{CLM}
+outputs will be written out at. 
+
+\begin{verbatim}
+pfset TimingInfo.DumpInterval             24.0
+\end{verbatim}
+
+Here we set the time step value. For this example we use a constant time step of 1hr. 
+
+\begin{verbatim}
+pfset TimeStep.Type                       Constant
+pfset TimeStep.Value                      1.0
+\end{verbatim}
+
+Next, we assign the porosity (\emph{see} \S~\ref{Porosity}).  As with the permeability
+we assign different values for different indicator geometries. Here we assign 
+values for all of our soil units but not for the geologic units, they will default to the
+domain value of 0.4. Note that every geometry listed in \file{Porosity.GeomNames} must have 
+values assigned. 
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Porosity
+#-----------------------------------------------------------------------------
+pfset Geom.Porosity.GeomNames             "domain s1 s2 s3 s4 s5 s6 s7 s8 s9"
+
+pfset Geom.domain.Porosity.Type          Constant
+pfset Geom.domain.Porosity.Value         0.4
+
+pfset Geom.s1.Porosity.Type    Constant
+pfset Geom.s1.Porosity.Value   0.375
+
+pfset Geom.s2.Porosity.Type    Constant
+pfset Geom.s2.Porosity.Value   0.39
+
+pfset Geom.s3.Porosity.Type    Constant
+pfset Geom.s3.Porosity.Value   0.387
+
+pfset Geom.s4.Porosity.Type    Constant
+pfset Geom.s4.Porosity.Value   0.439
+
+pfset Geom.s5.Porosity.Type    Constant
+pfset Geom.s5.Porosity.Value   0.489
+
+pfset Geom.s6.Porosity.Type    Constant
+pfset Geom.s6.Porosity.Value   0.399
+
+pfset Geom.s7.Porosity.Type    Constant
+pfset Geom.s7.Porosity.Value   0.384
+
+pfset Geom.s8.Porosity.Type            Constant
+pfset Geom.s8.Porosity.Value           0.482
+
+pfset Geom.s9.Porosity.Type            Constant
+pfset Geom.s9.Porosity.Value           0.442
+\end{verbatim}
+
+Having defined the geometry of our problem before and named it \code{domain}, we are
+now ready to report/upload that problem, which we do here.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Domain
+#-----------------------------------------------------------------------------
+pfset Domain.GeomName                     "domain"
+\end{verbatim}
+
+Mobility between phases is set to 1.0 because we only have one phase (water).
+
+\begin{verbatim}
+#----------------------------------------------------------------------------
+# Mobility
+#----------------------------------------------------------------------------
+pfset Phase.water.Mobility.Type        Constant
+pfset Phase.water.Mobility.Value       1.0
+\end{verbatim}
+
+Again, \parflow{} has more capabilities than we are using here in this example. 
+Note that since there are no well names listed here, \parflow{} assumes we have no wells. 
+If we had pumping wells, we would have to include them here, because they 
+would affect the head distribution throughout our domain.  See \S~\ref{Harvey Flow Example} 
+for an example of how to include pumping wells in this script.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Wells
+#-----------------------------------------------------------------------------
+pfset Wells.Names                         ""
+\end{verbatim}
+
+You can give certain periods of time names if you want. For example if you aren't running with \code{CLM} 
+and you would like to have periods with rain and periods without.   
+Here, however we have only one time cycle because \code{CLM} will handle the variable forcings.
+Therefore, we specify one time cycle and it's constant for the duration of the simulation. 
+We accomplish this by giving it a repeat value of -1, which repeats indefinitely.  The length of 
+the cycle is the length specified below (an integer) multiplied by the base unit value we specified earlier.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Time Cycles
+#-----------------------------------------------------------------------------
+pfset Cycle.Names                         "constant"
+pfset Cycle.constant.Names                "alltime"
+pfset Cycle.constant.alltime.Length        1
+pfset Cycle.constant.Repeat               -1
+\end{verbatim}
+
+Now, we assign Boundary Conditions for each face (each of the Patches in the domain defined before).  
+Recall the previously stated Patches and associate them with the boundary conditions that follow.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Boundary Conditions
+#-----------------------------------------------------------------------------
+pfset BCPressure.PatchNames                   [pfget Geom.domain.Patches]
+\end{verbatim}
+
+The bottom and sides of our domain are all set to no-flow (i.e. constant flux of 0) boundaries.
+
+\begin{verbatim}
+pfset Patch.x-lower.BCPressure.Type		      FluxConst
+pfset Patch.x-lower.BCPressure.Cycle		      "constant"
+pfset Patch.x-lower.BCPressure.alltime.Value	      0.0
+
+pfset Patch.y-lower.BCPressure.Type		      FluxConst
+pfset Patch.y-lower.BCPressure.Cycle		      "constant"
+pfset Patch.y-lower.BCPressure.alltime.Value	      0.0
+
+pfset Patch.z-lower.BCPressure.Type		      FluxConst
+pfset Patch.z-lower.BCPressure.Cycle		      "constant"
+pfset Patch.z-lower.BCPressure.alltime.Value	      0.0
+
+pfset Patch.x-upper.BCPressure.Type		      FluxConst
+pfset Patch.x-upper.BCPressure.Cycle		      "constant"
+pfset Patch.x-upper.BCPressure.alltime.Value	      0.0
+
+pfset Patch.y-upper.BCPressure.Type		      FluxConst
+pfset Patch.y-upper.BCPressure.Cycle		      "constant"
+pfset Patch.y-upper.BCPressure.alltime.Value	      0.0
+\end{verbatim}
+
+The top is set to an \code{OverlandFLow} boundary to turn on the fully-coupled overland flow
+routing. 
+
+\begin{verbatim}
+pfset Patch.z-upper.BCPressure.Type		      OverlandFlow
+pfset Patch.z-upper.BCPressure.Cycle		      "constant"
+pfset Patch.z-upper.BCPressure.alltime.Value	      0.0
+\end{verbatim}
+
+Next we define topographic slopes and values. These slope values were derived from a digital
+elevation model of the domain following the workflow outlined in \S~\ref{Defining a Real domain}.
+In this example we read the slope files in from \file{.pfb} files that were copied into the run directory
+at the start of this script. 
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Topo slopes in x-direction
+#-----------------------------------------------------------------------------
+pfset TopoSlopesX.Type                                "PFBFile"
+pfset TopoSlopesX.GeomNames                           "domain"
+pfset TopoSlopesX.FileName                            "LW.slopex.pfb"
+
+#-----------------------------------------------------------------------------
+# Topo slopes in y-direction
+#-----------------------------------------------------------------------------
+pfset TopoSlopesY.Type                                "PFBFile"
+pfset TopoSlopesY.GeomNames                           "domain"
+pfset TopoSlopesY.FileName                            "LW.slopey.pfb"
+\end{verbatim}
+
+And now we define the Mannings \emph{n}, again just one value for the whole domain in this example. 
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Mannings coefficient
+#-----------------------------------------------------------------------------
+pfset Mannings.Type                                   "Constant"
+pfset Mannings.GeomNames                              "domain"
+pfset Mannings.Geom.domain.Value                      5.52e-6
+\end{verbatim}
+
+Following the same approach as we did for \file{Porosity} we define the relative permeability
+inputs that will be used for Richards' equation implementation (\S~\ref{Richards RelPerm}).
+Here we use \file{VanGenuchten} parameters. Note that every geometry listed in \file{Porosity.GeomNames} must have 
+values assigned. 
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Relative Permeability
+#-----------------------------------------------------------------------------
+pfset Phase.RelPerm.Type                  VanGenuchten
+pfset Phase.RelPerm.GeomNames             "domain s1 s2 s3 s4 s5 s6 s7 s8 s9 "
+
+pfset Geom.domain.RelPerm.Alpha           3.5
+pfset Geom.domain.RelPerm.N               2.0
+
+pfset Geom.s1.RelPerm.Alpha        3.548
+pfset Geom.s1.RelPerm.N            4.162
+
+pfset Geom.s2.RelPerm.Alpha        3.467
+pfset Geom.s2.RelPerm.N            2.738
+
+pfset Geom.s3.RelPerm.Alpha        2.692
+pfset Geom.s3.RelPerm.N            2.445
+
+pfset Geom.s4.RelPerm.Alpha        0.501
+pfset Geom.s4.RelPerm.N            2.659
+
+pfset Geom.s5.RelPerm.Alpha        0.661
+pfset Geom.s5.RelPerm.N            2.659
+
+pfset Geom.s6.RelPerm.Alpha        1.122
+pfset Geom.s6.RelPerm.N            2.479
+
+pfset Geom.s7.RelPerm.Alpha        2.089
+pfset Geom.s7.RelPerm.N            2.318
+
+pfset Geom.s8.RelPerm.Alpha        0.832
+pfset Geom.s8.RelPerm.N            2.514
+
+pfset Geom.s9.RelPerm.Alpha        1.585
+pfset Geom.s9.RelPerm.N            2.413
+\end{verbatim}
+
+Next we do the same thing for saturation (\S~\ref{Saturation}) again using the \file{VanGenuchten} parameters
+Note that every geometry listed in \file{Porosity.GeomNames} must have 
+values assigned. 
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Saturation
+#-----------------------------------------------------------------------------
+pfset Phase.Saturation.Type               VanGenuchten
+pfset Phase.Saturation.GeomNames          "domain s1 s2 s3 s4 s5 s6 s7 s8 s9 "
+
+pfset Geom.domain.Saturation.Alpha        3.5
+pfset Geom.domain.Saturation.N            2.
+pfset Geom.domain.Saturation.SRes         0.2
+pfset Geom.domain.Saturation.SSat         1.0
+
+pfset Geom.s1.Saturation.Alpha        3.548
+pfset Geom.s1.Saturation.N            4.162
+pfset Geom.s1.Saturation.SRes         0.000001
+pfset Geom.s1.Saturation.SSat         1.0
+
+pfset Geom.s2.Saturation.Alpha        3.467
+pfset Geom.s2.Saturation.N            2.738
+pfset Geom.s2.Saturation.SRes         0.000001
+pfset Geom.s2.Saturation.SSat         1.0
+
+pfset Geom.s3.Saturation.Alpha        2.692
+pfset Geom.s3.Saturation.N            2.445
+pfset Geom.s3.Saturation.SRes         0.000001
+pfset Geom.s3.Saturation.SSat         1.0
+
+pfset Geom.s4.Saturation.Alpha        0.501
+pfset Geom.s4.Saturation.N            2.659
+pfset Geom.s4.Saturation.SRes         0.000001
+pfset Geom.s4.Saturation.SSat         1.0
+
+pfset Geom.s5.Saturation.Alpha        0.661
+pfset Geom.s5.Saturation.N            2.659
+pfset Geom.s5.Saturation.SRes         0.000001
+pfset Geom.s5.Saturation.SSat         1.0
+
+pfset Geom.s6.Saturation.Alpha        1.122
+pfset Geom.s6.Saturation.N            2.479
+pfset Geom.s6.Saturation.SRes         0.000001
+pfset Geom.s6.Saturation.SSat         1.0
+
+pfset Geom.s7.Saturation.Alpha        2.089
+pfset Geom.s7.Saturation.N            2.318
+pfset Geom.s7.Saturation.SRes         0.000001
+pfset Geom.s7.Saturation.SSat         1.0
+
+pfset Geom.s8.Saturation.Alpha        0.832
+pfset Geom.s8.Saturation.N            2.514
+pfset Geom.s8.Saturation.SRes         0.000001
+pfset Geom.s8.Saturation.SSat         1.0
+
+pfset Geom.s9.Saturation.Alpha        1.585
+pfset Geom.s9.Saturation.N            2.413
+pfset Geom.s9.Saturation.SRes         0.000001
+pfset Geom.s9.Saturation.SSat         1.0
+\end{verbatim}
+
+Phase sources allows you to add sources other than wells and boundaries, but 
+we do not have any so this key is constant, 0.0 over entire domain.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Phase sources:
+#-----------------------------------------------------------------------------
+pfset PhaseSources.water.Type                         "Constant"
+pfset PhaseSources.water.GeomNames                    "domain"
+pfset PhaseSources.water.Geom.domain.Value            0.0
+\end{verbatim}
+
+In this example we are using \parflow{} \file{CLM} so we must provide some parameters for \file{CLM} (\S~\ref{CLM Solver Parameters}).
+Note that \file{CLM} will also require some additional inputs outside of the tcl script. Refer to 
+\file{/washita/clm_input/} for examples of the \code{CLM} \file{vegm} and \file{driver} files. These inputs
+are also discussed briefly in \S~\ref{Defining a Real domain}.
+
+\begin{verbatim}
+#----------------------------------------------------------------
+# CLM Settings:
+# ------------------------------------------------------------
+\end{verbatim}
+
+First we specify that we will be using \code{CLM} as the land surface model and provide the name of a directory
+that outputs will be written to. For this example we do not need outputs for each processor or a binary output directory. 
+Finally we set the dump interval to 1, indicating that we will be writing outputs for every time step. Note that
+this does not have to match the dump interval for \parflow{} outputs. Recall that earlier we set the \parflow{} dump
+interval to 24. 
+
+\begin{verbatim}
+pfset Solver.LSM                                      CLM
+pfset Solver.CLM.CLMFileDir                           "clm_output/"
+pfset Solver.CLM.Print1dOut                           False
+pfset Solver.BinaryOutDir                             False
+pfset Solver.CLM.CLMDumpInterval                      1
+\end{verbatim}
+
+Next we specify the details of the meteorological forcing files that \code{clm} will read. First we provide the 
+name of the files and the directory they can be found in. Next we specify that we are using
+\file{3D} forcing files meaning that we have spatially distributed forcing with multiple time steps in every 
+file. Therefore we must also specify the number of times steps (\code{MetFileNT}) in every file, in this case 24.  
+Finally, we specify the initial value for the CLM counter. 
+
+\begin{verbatim}
+pfset Solver.CLM.MetFileName                          "NLDAS"
+pfset Solver.CLM.MetFilePath                          "../../NLDAS/"
+pfset Solver.CLM.MetForcing                           3D
+pfset Solver.CLM.MetFileNT                            24
+pfset Solver.CLM.IstepStart                           1
+\end{verbatim}
+
+This last set of \code{CLM} parameters refers to the physical properties of the system. Refer to \S~\ref{CLM Solver Parameters}
+for details. 
+\begin{verbatim}
+pfset Solver.CLM.EvapBeta                             Linear
+pfset Solver.CLM.VegWaterStress                       Saturation
+pfset Solver.CLM.ResSat                               0.1
+pfset Solver.CLM.WiltingPoint                         0.12
+pfset Solver.CLM.FieldCapacity                        0.98
+pfset Solver.CLM.IrrigationType                       none
+\end{verbatim}
+
+Next we set the initial conditions for the domain. In this example we are using a pressure \file{.pfb} 
+file that was obtained by spinning up the model in the workflow outlined in \S~\ref{Defining a Real domain}.
+Alternatively, the water table can be set to a constant value by changing the \code{ICPressure.Type}. Again, 
+the input file that is referenced here was was copied into the run directory at the top of this script. 
+
+\begin{verbatim}
+#---------------------------------------------------------
+# Initial conditions: water pressure
+#---------------------------------------------------------
+pfset ICPressure.Type                                 PFBFile
+pfset ICPressure.GeomNames                            domain
+pfset Geom.domain.ICPressure.RefPatch                   z-upper
+pfset Geom.domain.ICPressure.FileName                   press.init.pfb
+\end{verbatim}
+
+Now we specify what outputs we would like written. In this example we specify that we would like to write
+out \code{CLM} variables as well as \file{Pressure} and \file{Saturation}. However, there are many options 
+for this and you should change these options according to what type of analysis you will be performing on your 
+results. A complete list of print options is provided in \S~\ref{Code Parameters}. 
+
+\begin{verbatim}
+#----------------------------------------------------------------
+# Outputs
+# ------------------------------------------------------------
+#Writing output (all pfb):
+pfset Solver.PrintSubsurfData                         False
+pfset Solver.PrintPressure                            True
+pfset Solver.PrintSaturation                          True
+pfset Solver.PrintMask                                True
+
+pfset Solver.WriteCLMBinary                           False
+pfset Solver.PrintCLM                                 True
+pfset Solver.WriteSiloSpecificStorage                 False
+pfset Solver.WriteSiloMannings                        False
+pfset Solver.WriteSiloMask                            False
+pfset Solver.WriteSiloSlopes                          False
+pfset Solver.WriteSiloSubsurfData                     False
+pfset Solver.WriteSiloPressure                        False
+pfset Solver.WriteSiloSaturation                      False
+pfset Solver.WriteSiloEvapTrans                       False
+pfset Solver.WriteSiloEvapTransSum                    False
+pfset Solver.WriteSiloOverlandSum                     False
+pfset Solver.WriteSiloCLM                             False
+\end{verbatim}
+
+Next we specify the solver settings for the ParFlow (\S~\ref{RE Solver Parameters}).
+First we turn on solver Richards and the terrain following grid.  We turn off 
+variable dz.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Set solver parameters
+#-----------------------------------------------------------------------------
+# ParFlow Solution
+pfset Solver                                          Richards
+pfset Solver.TerrainFollowingGrid                     True
+pfset Solver.Nonlinear.VariableDz                     False
+\end{verbatim}
+
+We then set the max solver settings and linear and nonlinear convergence
+tolerance settings. The linear system will be solved to a norm of $10^{-8}$ and 
+the nonlinear system will be solved to less than $10^{-6}$. Of note in latter key block 
+is the EtaChoice and that we use the analytical Jacobian (\emph{UseJacobian=\bf{True}}).
+We are using the \emph{FullJacobian} preconditioner, which is a more robust approach
+but is more expensive.
+\begin{verbatim}
+pfset Solver.MaxIter                                  25000
+pfset Solver.Drop                                     1E-20
+pfset Solver.AbsTol                                   1E-8
+pfset Solver.MaxConvergenceFailures                   8
+pfset Solver.Nonlinear.MaxIter                        80
+pfset Solver.Nonlinear.ResidualTol                    1e-6
+
+pfset Solver.Nonlinear.EtaChoice                         EtaConstant
+pfset Solver.Nonlinear.EtaValue                          0.001
+pfset Solver.Nonlinear.UseJacobian                       True 
+pfset Solver.Nonlinear.DerivativeEpsilon                 1e-16
+pfset Solver.Nonlinear.StepTol				 			1e-30
+pfset Solver.Nonlinear.Globalization                     LineSearch
+pfset Solver.Linear.KrylovDimension                      70
+pfset Solver.Linear.MaxRestarts                           2
+
+pfset Solver.Linear.Preconditioner                       PFMG
+pfset Solver.Linear.Preconditioner.PCMatrixType     FullJacobian
+\end{verbatim}
+
+This key is just for testing the Richards' formulation, so we are not using it.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Exact solution specification for error calculations
+#-----------------------------------------------------------------------------
+pfset KnownSolution                                   NoKnownSolution
+\end{verbatim}
+
+Next we distribute all the inputs as described by the keys in \S~\ref{PFTCL Commands}.  Note the slopes 
+are 2D files, while the rest of the \parflow{} inputs are 3D so we need to alter the NZ accordingly
+following example \ref{dist example} in \S~\ref{common_pftcl}.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Distribute inputs
+#-----------------------------------------------------------------------------
+pfset ComputationalGrid.NX                41 
+pfset ComputationalGrid.NY                41 
+pfset ComputationalGrid.NZ                1
+pfdist LW.slopex.pfb
+pfdist LW.slopey.pfb
+
+pfset ComputationalGrid.NX                41 
+pfset ComputationalGrid.NY                41 
+pfset ComputationalGrid.NZ                50 
+pfdist IndicatorFile_Gleeson.50z.pfb
+pfdist press.init.pfb
+\end{verbatim}
+
+Now we run the simulation.  Note that we use a tcl variable to set the run name.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Run Simulation
+#-----------------------------------------------------------------------------
+set runname "LW"
+puts $runname
+pfrun    $runname
+\end{verbatim}
+
+All that is left is to undistribute files.
+
+\begin{verbatim}
+#-----------------------------------------------------------------------------
+# Undistribute Files
+#-----------------------------------------------------------------------------
+pfundist $runname
+pfundist press.init.pfb
+pfundist LW.slopex.pfb
+pfundist LW.slopey.pfb
+pfundist IndicatorFile_Gleeson.50z.pfb
+
+puts "ParFlow run Complete"
+\end{verbatim}
+
+
 
 %============
 %============

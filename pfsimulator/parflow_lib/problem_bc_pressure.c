@@ -39,7 +39,7 @@
 typedef struct
 {
    int     num_phases;
-
+   //int     iflag;   //@RMM
 } PublicXtra;
 
 typedef struct
@@ -96,9 +96,11 @@ BCStruct    *BCPressure(
    int             num_patches;
    int             ipatch, is, i, j, k, ival, phase;
    int             cycle_number, interval_number;
+ 
 	         
+ //       if (time == 10000.0) {
+      //      printf("time: %f \n", time);
    bc_struct = NULL;
-
    num_patches = BCPressureDataNumPatches(bc_pressure_data);
 
    if (num_patches > 0)
@@ -703,7 +705,8 @@ BCStruct    *BCPressure(
 
                   itmp = SubvectorEltIndex(subvector, i, j, k);
 
-                  patch_values[ival] = tmpp[itmp] - density*gravity*z;
+                  patch_values[ival] = tmpp[itmp]; /*- density*gravity*z;*/
+                  /*last part taken out, very likely to be a bug)*/
 
                });
 
@@ -914,13 +917,61 @@ BCStruct    *BCPressure(
 	    }     /* End subgrid loop */
 	    break;
 	 }	
-
-
-	 }
+             case 8:
+             {
+                 /* Read input fluxes from file (overland) */
+                 BCPressureType8 *bc_pressure_type8;
+                 Vector          *tmp_vector;
+                 Subvector       *subvector;
+                 //double          *data;
+                 char            *filename;
+                 double          *tmpp;
+                 int              itmp;
+                 double           dtmp;
+                 
+                 bc_pressure_type8 = BCPressureDataIntervalValue(bc_pressure_data,ipatch,interval_number);
+                 
+                 ForSubgridI(is, subgrids)
+                 {
+                     /* compute patch_values_size (this isn't really needed yet) */
+                     patch_values_size = 0;
+                     BCStructPatchLoop(i, j, k, fdir, ival, bc_struct, ipatch, is,
+                                       {
+                                           patch_values_size++;
+                                       });
+                     
+                     patch_values = ctalloc(double, patch_values_size);
+                     values[ipatch][is] = patch_values;
+                     
+                     tmp_vector = NewVectorType(grid, 1, 0, vector_cell_centered);
+                     //data = ctalloc(double, SizeOfVector(tmp_vector));
+                     //SetTempVectorData(tmp_vector, data);
+                     
+                     printf("reading overland file \n");
+                     filename = BCPressureType8FileName(bc_pressure_type8);
+                     ReadPFBinary(filename, tmp_vector);
+                     
+                     subvector = VectorSubvector(tmp_vector, is);
+                     
+                     tmpp = SubvectorData(subvector);
+                     BCStructPatchLoop(i, j, k, fdir, ival, bc_struct, ipatch, is,
+                                       {
+                                           itmp = SubvectorEltIndex(subvector, i, j, k);
+                                           
+                                           patch_values[ival] = tmpp[itmp];
+                                       });
+                     
+                     //tfree(VectorData(tmp_vector));
+                     FreeVector(tmp_vector);
+                 }       /* End subgrid loop */
+                 break;
+             }
+                 
+         }
       }
    }
-
-   return bc_struct;
+    //}
+    return bc_struct;
 }
 
 

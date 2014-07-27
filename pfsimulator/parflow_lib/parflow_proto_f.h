@@ -97,8 +97,8 @@ void SADVECT(double *s, double *sn,
 /* sk: clm.F90*/
 #define CLM_LSM clm_lsm_
 #define CALL_CLM_LSM(pressure_data,saturation_data,evap_trans_data,mask,porosity_data, \
-                     istep, dt, t, start_time, dx, dy, dz, ix, iy, nx, ny, nz, \
-		     nx_f, ny_f, nz_f, ip, p, q, r, rank,		\
+                     dz_mult_data, istep, dt, t, start_time, dx, dy, dz, ix, iy, nx, ny, nz, \
+		     nx_f, ny_f, nz_f, nz_rz, ip, p, q, r, gnx, gny, rank,		\
                      sw_data, lw_data, prcp_data, tas_data, u_data, v_data, patm_data, qatm_data, \
                      eflx_lh_tot_data, eflx_lwrad_out_data, eflx_sh_tot_data, eflx_soil_grnd_data, \
                      qflx_evap_tot_data, qflx_evap_grnd_data, qflx_evap_soi_data, qflx_evap_veg_data, qflx_tran_veg_data, \
@@ -106,9 +106,9 @@ void SADVECT(double *s, double *sn,
                      clm_dump_interval, clm_1d_out, clm_file_dir , clm_file_dir_length, clm_bin_out_dir, write_CLM_binary,  \
                      clm_beta_function, clm_veg_function, clm_veg_wilting, clm_veg_fieldc, clm_res_sat, \
                      clm_irr_type, clm_irr_cycle, clm_irr_rate, clm_irr_start, clm_irr_stop, \
-                     clm_irr_threshold, qirr, qirr_inst, iflag, clm_irr_thresholdtype ) \
-        CLM_LSM(pressure_data, saturation_data,evap_trans_data,mask,porosity_data, \
-		&istep, &dt, &t, &start_time, &dx, &dy, &dz, &ix, &iy, &nx, &ny, &nz, &nx_f, &ny_f, &nz_f, &ip, &p, &q, &r, &rank, \
+                     clm_irr_threshold, qirr, qirr_inst, iflag, clm_irr_thresholdtype, soi_z, clm_next, clm_write_logs, clm_last_rst, clm_daily_rst) \
+        CLM_LSM(pressure_data, saturation_data, evap_trans_data, mask, porosity_data, \
+		dz_mult_data, &istep, &dt, &t, &start_time, &dx, &dy, &dz, &ix, &iy, &nx, &ny, &nz, &nx_f, &ny_f, &nz_f, &nz_rz, &ip, &p, &q, &r,&gnx, &gny, &rank, \
 		sw_data, lw_data, prcp_data, tas_data, u_data, v_data, patm_data, qatm_data, \
 		eflx_lh_tot_data, eflx_lwrad_out_data, eflx_sh_tot_data, eflx_soil_grnd_data, \
 		qflx_evap_tot_data, qflx_evap_grnd_data, qflx_evap_soi_data, qflx_evap_veg_data, qflx_tran_veg_data, \
@@ -116,12 +116,12 @@ void SADVECT(double *s, double *sn,
 		&clm_dump_interval, &clm_1d_out, clm_file_dir, &clm_file_dir_length, &clm_bin_out_dir, \
 		&write_CLM_binary, &clm_beta_function, &clm_veg_function, &clm_veg_wilting, &clm_veg_fieldc, \
 		&clm_res_sat, &clm_irr_type, &clm_irr_cycle, &clm_irr_rate, &clm_irr_start, &clm_irr_stop, \
-		&clm_irr_threshold, qirr, qirr_inst, iflag, &clm_irr_thresholdtype );
+		&clm_irr_threshold, qirr, qirr_inst, iflag, &clm_irr_thresholdtype, &soi_z,  &clm_next, &clm_write_logs, &clm_last_rst, &clm_daily_rst);
 
 void CLM_LSM( double *pressure_data, double *saturation_data, double *evap_trans_data, double *mask, double *porosity_data, 
-              int *istep, double *dt, double *t, double *start_time,
+              double *dz_mult_data, int *istep, double *dt, double *t, double *start_time,
 	      double *dx, double *dy, double *dz, int *ix, int *iy, int *nx, int *ny, int *nz, 
-              int *nx_f, int *ny_f, int *nz_f, int *ip, int *p, int *q, int *r, int *rank, 
+              int *nx_f, int *ny_f, int *nz_f, int *nz_rz, int *ip, int *p, int *q, int *r, int *gnx, int *gny, int *rank, 
               double *sw_data, double *lw_data, double *prcp_data, double *tas_data, double *u_data, double *v_data, double *patm_data, double *qatm_data,
               double *eflx_lh_tot_data, double *eflx_lwrad_out_data, double *eflx_sh_tot_data, double *eflx_soil_grnd_data, double *qflx_eval_tot_data, 
               double *qflx_evap_grnd_data, double *qflx_evap_soi_data, double *qflx_evap_veg_data, double *qflx_tran_veg_data, 
@@ -129,8 +129,15 @@ void CLM_LSM( double *pressure_data, double *saturation_data, double *evap_trans
               char *clm_file_dir, int *clm_file_dir_length, int *clm_bin_out_dir, int *write_CLM_binary, int *clm_beta_function, 
               int *clm_veg_function, double *clm_veg_wilting, double *clm_veg_fieldc, double *clm_res_sat, 
               int *clm_irr_type, int *clm_irr_cycle, double *clm_irr_rate, double *clm_irr_start, double *clm_irr_stop, 
-              double *clm_irr_threshold, double *qirr, double *qirr_inst, double *iflag, int *clm_irr_thresholdtype );
+              double *clm_irr_threshold, double *qirr, double *qirr_inst, double *iflag, int *clm_irr_thresholdtype, int *soi_z,
+              int *clm_next, int *clm_write_logs, int *clm_last_rst, int *clm_daily_rst);
 
+    /* @RMM CRUNCHFLOW.F90*/
+//#define CRUNCHFLOW crunchflow_
+//#define CALL_CRUNCHFLOW();
+    
+//    void CRUCHFLOW( );    
+    
 #ifdef __cplusplus     /* wrapper to enable C++ usage */
 }
 #endif

@@ -206,9 +206,15 @@ Problem   *NewProblem(
 
    ProblemMannings(problem) =
       PFModuleNewModule(Mannings, ()); //sk
+    
+    ProblemdzScale(problem) =
+    PFModuleNewModule(dzScale, ()); //RMM
 
    ProblemOverlandFlowEval(problem) =
       PFModuleNewModule(OverlandFlowEval, ()); //DOK
+
+    ProblemOverlandFlowEvalDiff(problem) =
+    PFModuleNewModule(OverlandFlowEvalDiff, ()); //@RMM
 
    if ( solver != RichardsSolve )
    {
@@ -352,8 +358,10 @@ void      FreeProblem(
    PFModuleFreeModule(ProblemXSlope(problem)); //sk
    PFModuleFreeModule(ProblemYSlope(problem));
    PFModuleFreeModule(ProblemMannings(problem));
-
+    PFModuleFreeModule(ProblemdzScale(problem));  //RMM
+    
    PFModuleFreeModule(ProblemOverlandFlowEval(problem)); //DOK
+    PFModuleFreeModule(ProblemOverlandFlowEvalDiff(problem)); //@RMM
 
    PFModuleFreeModule(ProblemDomain(problem));
 
@@ -386,6 +394,13 @@ ProblemData   *NewProblemData(
    ProblemDataTSlopeY(problem_data)  = NewVectorType(grid2d, 1, 1, vector_cell_centered_2D); //sk
    ProblemDataMannings(problem_data) = NewVectorType(grid2d, 1, 1, vector_cell_centered_2D); //sk
 
+    /* @RMM added vectors for subsurface slopes for terrain-following grid */
+   ProblemDataSSlopeX(problem_data)  = NewVectorType(grid2d, 1, 1, vector_cell_centered_2D); //RMM
+   ProblemDataSSlopeY(problem_data)  = NewVectorType(grid2d, 1, 1, vector_cell_centered_2D); //RMM
+ 
+    /* @RMM added vector dz multiplier */
+   ProblemDataZmult(problem_data)  = NewVectorType(grid, 1, 1, vector_cell_centered); //RMM
+    
    ProblemDataIndexOfDomainTop(problem_data) = NewVectorType(grid2d, 1, 1, vector_cell_centered_2D); 
 
    ProblemDataPorosity(problem_data) = NewVectorType(grid, 1, 1, vector_cell_centered);
@@ -429,7 +444,9 @@ void          FreeProblemData(
       FreeVector(ProblemDataTSlopeX(problem_data)); //sk
       FreeVector(ProblemDataTSlopeY(problem_data)); //sk
       FreeVector(ProblemDataMannings(problem_data)); //sk
-
+      FreeVector(ProblemDataSSlopeX(problem_data)); //RMM
+      FreeVector(ProblemDataSSlopeY(problem_data)); //RMM
+      FreeVector(ProblemDataZmult(problem_data)); //RMM
       FreeVector(ProblemDataIndexOfDomainTop(problem_data));
 
       tfree(problem_data);

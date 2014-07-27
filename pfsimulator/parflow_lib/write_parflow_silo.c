@@ -62,6 +62,7 @@ void       WriteSilo_Subvector(DBfile *db_file, Subvector *subvector, Subgrid   
 
    int            i, j, k, ai;
    double         *data;
+    double         mult, z_coord;  //@RMM dz scale info
 
    int            err;
 
@@ -102,9 +103,20 @@ void       WriteSilo_Subvector(DBfile *db_file, Subvector *subvector, Subgrid   
    }
 
    coords[2] = ctalloc(float, dims[2]);
-   for(k = 0; k < dims[2]; k++) {
-      coords[2][k] =    SubgridZ(subgrid) + SubgridDZ(subgrid) * ((float)k - 0.5);
-   }
+    z_coord = SubgridZ(subgrid);
+/*  @RMM-- bare bones testing 
+ for implementing variable dz into silo output
+ need to brab the vardz vector out of problem data
+ and use in a sum as indicated here  */
+ for(k = 0; k < dims[2]; k++) {
+      /* mult = 1.0;
+       if ( k > 19 ) {
+           mult = 0.4;
+       } 
+       z_coord +=  SubgridDZ(subgrid)*mult; 
+      coords[2][k] =  z_coord; */
+           coords[2][k] =    SubgridZ(subgrid) + SubgridDZ(subgrid) * ((float)k - 0.5);
+   }  
 
    sprintf(meshname, "%s_%06u", "mesh", p);
 
@@ -240,6 +252,8 @@ void     WriteSiloInit(char    *file_prefix)
 			      "mannings",
 			      "specific_storage",
 			      "mask",
+                              "dz_mult",            // IMF -- added...
+                              "top",                // IMF -- added...
 			      "eflx_lh_tot",
 			      "eflx_lwrad_out",
 			      "eflx_sh_tot",
@@ -259,10 +273,9 @@ void     WriteSiloInit(char    *file_prefix)
 			      "evaptranssum",
 			      "overlandsum",
                               "overland_bc_flux",
-                              "press_pre_clm",
-                              "press_post_clm"
       };
 
+      // IMF -- added second '+2' to next line...
       for(i = 0; i < 31+2; i++) {
 	 sprintf(filename, "%s/%s", file_prefix, output_types[i]);
 	 pf_mk_dir(filename);

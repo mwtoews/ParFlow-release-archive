@@ -51,8 +51,6 @@ subroutine drv_readvegpf (drv,grid,tile,clm)
   !=== End Variable List ===================================================
 
   ! Open and read 1-D  CLM input file
-  print*, "Open and read 1-D  CLM input file"
-  print*, drv%vegpf
   open(9, file=drv%vegpf, form='formatted', status = 'old',action='read')
 
   ioval=0
@@ -81,7 +79,7 @@ subroutine drv_readvegpf (drv,grid,tile,clm)
      if (vname == 'xl')        call drv_vpr(drv,tile,clm%xl)
      if (vname == 'vw')        call drv_vpr(drv,tile,clm%vw)
      if (vname == 'irrig')     call drv_vpi(drv,tile,clm%irrig)    ! @IMF
-
+     if (vname == 'bkmult')    call drv_vpr(drv,tile,clm%bkmult)   ! @CAP 2014-02-24
      ! initialize lakpoi from itypwat variable
 
      do t=1,drv%nch 

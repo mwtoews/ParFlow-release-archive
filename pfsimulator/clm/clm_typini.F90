@@ -85,6 +85,7 @@ subroutine clm_typini (ntiles, clm, istep_pf)
      clm(k)%z0m       = NaN      ! aerodynamic roughness length [m]
      clm(k)%displa    = NaN      ! displacement height [m]
      clm(k)%dleaf     = NaN      ! inverse sqrt of leaf dimension [m**-0.5]
+     clm(k)%bkmult    = 1.0d0    ! beetle kill multiplier, init to 1 in case not set @CAP 2014-02-24
 
      ! soil physical parameters
      clm(k)%bsw   (:) = NaN      ! Clapp and Hornberger "b"
@@ -133,6 +134,7 @@ subroutine clm_typini (ntiles, clm, istep_pf)
      clm(k)%frac_veg_nosno     = bigint! fraction of veg cover, excluding snow-covered veg (now 0 OR 1) [-]
      clm(k)%zi(:)              = NaN   ! interface level below a "z" level (m)
      clm(k)%dz(:)              = NaN   ! layer depth (m)
+     clm(k)%dz_mult(:)         = NaN   ! IMF: dz multiplier from ParFlow
      clm(k)%z(:)               = NaN   ! layer thickness (m)
      clm(k)%t_soisno(:)        = NaN   ! soil + snow layer temperature [K]
      clm(k)%h2osoi_liq(:)      = NaN   ! liquid water (kg/m2)
@@ -299,7 +301,7 @@ subroutine clm_typini (ntiles, clm, istep_pf)
      
      ! topomasks - parflow-clm couple parameters
      clm(k)%topo_mask(:)      = NaN  
-     clm(k)%planar_mask       = NaN         
+     clm(k)%planar_mask       = 0.0  ! was NaN...init to 0.0 
 
   end do
 

@@ -723,6 +723,7 @@ LIB_NAME
 SH_INC_PATH
 SH_LIB_PATH
 SH_LIB_NAME
+with_amps_sequential_io
 LIBOBJS
 LTLIBOBJS'
 ac_subst_files=''
@@ -9182,6 +9183,9 @@ case "$with_amps" in
   mpi1)
     AMPS=mpi1
   ;;
+  oas3)
+    AMPS=oas3
+  ;;
   smpi)
     AMPS=smpi
   ;;
@@ -9189,8 +9193,8 @@ case "$with_amps" in
     AMPS=win32
   ;;
   *)
-    { { echo "$as_me:$LINENO: error: Invalid AMPS version specified, use seq, mpi1, smpi, win32" >&5
-echo "$as_me: error: Invalid AMPS version specified, use seq, mpi1, smpi, win32" >&2;}
+    { { echo "$as_me:$LINENO: error: Invalid AMPS version specified, use seq, mpi1, oas3, smpi, win32" >&5
+echo "$as_me: error: Invalid AMPS version specified, use seq, mpi1, oas3, smpi, win32" >&2;}
    { (exit 1); exit 1; }; }
   ;;
 esac
@@ -9217,13 +9221,17 @@ cat >>confdefs.h <<_ACEOF
 #define AMPS $AMPS
 _ACEOF
 
-
-
+# Check whether --with-amps-with-sequential-io was given.
+if test "$with_amps_sequential_io" = yes; then
+echo "Configuring PFTools with AMPS Single File IO"
+else
 # Check whether --with-amps was given.
 if test "${with_amps+set}" = set; then
   withval=$with_amps; cat >>confdefs.h <<\_ACEOF
 #define AMPS_SPLIT_FILE 1
 _ACEOF
+fi
+echo "Configuring PFTools with AMPS Distributed File IO"
 
 fi
 

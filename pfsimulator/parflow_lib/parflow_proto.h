@@ -666,11 +666,11 @@ void ICPhasePressureFreePublicXtra (void );
 int ICPhasePressureSizeOfTempData (void );
 
 typedef void (*ManningsInvoke) (ProblemData *problem_data, Vector *mann, Vector *dummy);
-typedef PFModule *(*ManningsInitInstanceXtraInvoke) (Grid *grid);
+typedef PFModule *(*ManningsInitInstanceXtraInvoke) (Grid *grid3d, Grid *grid2d);
 
 /* problem_mannings.c */
 void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy);
-PFModule *ManningsInitInstanceXtra (Grid *grid);
+PFModule *ManningsInitInstanceXtra (Grid *grid3d, Grid *grid2d);
 void ManningsFreeInstanceXtra (void );
 PFModule *ManningsNewPublicXtra (void);
 void ManningsFreePublicXtra (void );
@@ -685,6 +685,18 @@ void SpecStorageFreeInstanceXtra (void );
 PFModule *SpecStorageNewPublicXtra (void );
 void SpecStorageFreePublicXtra (void );
 int SpecStorageSizeOfTempData (void );
+
+/* @RMM new module for dz scaling factors */
+
+typedef void (*dzScaleInvoke) (ProblemData *problem_data, Vector *dz_mult );
+
+/* problem_dz_scale.c */
+void dzScale (ProblemData *problem_data, Vector *dz_mult );
+PFModule *dzScaleInitInstanceXtra (void );
+void dzScaleFreeInstanceXtra (void );
+PFModule *dzScaleNewPublicXtra (void );
+void dzScaleFreePublicXtra (void );
+int dzScaleSizeOfTempData (void );
 
 /* DOK - overlandfloweval */
 typedef void (*OverlandFlowEvalInvoke) (Grid *grid, 
@@ -719,6 +731,48 @@ void OverlandFlowEvalFreeInstanceXtra (void );
 PFModule *OverlandFlowEvalNewPublicXtra (void);
 void OverlandFlowEvalFreePublicXtra (void );
 int OverlandFlowEvalSizeOfTempData (void );
+
+/* @RMM - overlandflowevaldiffusive */
+typedef void (*OverlandFlowEvalDiffInvoke) (Grid *grid, 
+                                        int sg,
+                                        BCStruct *bc_struct,
+                                        int ipatch,
+                                        ProblemData *problem_data, 
+                                        Vector *pressure,  
+                                        double *ke_v,
+                                        double *kw_v,
+                                        double *kn_v,
+                                        double *ks_v,
+                                        double *ke_vns,       
+                                        double *kw_vns,       
+                                        double *kn_vns,       
+                                        double *ks_vns,   
+                                        double *qx_v,
+                                        double *qy_v,      
+                                        int     fcn);
+
+void OverlandFlowEvalDiff (Grid *grid, 
+                       int sg,
+                       BCStruct *bc_struct,
+                       int ipatch,
+                       ProblemData *problem_data, 
+                       Vector *pressure,  
+                       double *ke_v,
+                       double *kw_v,
+                       double *kn_v,
+                       double *ks_v,
+                       double *ke_vns,       
+                       double *kw_vns,       
+                       double *kn_vns,       
+                       double *ks_vns,   
+                       double *qx_v,
+                       double *qy_v,      
+                       int     fcn);
+PFModule *OverlandFlowEvalDiffInitInstanceXtra (void);
+void OverlandFlowEvalDiffFreeInstanceXtra (void );
+PFModule *OverlandFlowEvalDiffNewPublicXtra (void);
+void OverlandFlowEvalDiffFreePublicXtra (void );
+int OverlandFlowEvalDiffSizeOfTempData (void );
 
 typedef void (*ICPhaseSaturInvoke) (Vector *ic_phase_satur , int phase , ProblemData *problem_data );
 typedef PFModule *(*ICPhaseSaturNewPublicXtraInvoke) (int num_phases );
@@ -1164,6 +1218,17 @@ void     WriteSilo(char    *file_prefix,
 		   int step, 
 		   char *variable_name);
 void     WriteSiloInit(char    *file_prefix);
+
+/* write_parflow_silo_PMPIO.c */
+void     WriteSiloPMPIO(char    *file_prefix, 
+                   char    *file_type, 
+                   char    *file_suffix, 
+                   Vector  *v, 
+                   double time, 
+                   int step, 
+                   char *variable_name);
+void     WriteSiloPMPIOInit(char    *file_prefix);
+
 
 /* wrf_parflow.c */
 void wrfparflowinit_ ();

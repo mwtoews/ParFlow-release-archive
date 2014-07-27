@@ -42,7 +42,8 @@ typedef struct
 
 typedef struct
 {
-   Grid   *grid2d;
+   Grid   *grid3d;
+       Grid   *grid2d;
    double *temp_data;
 } InstanceXtra;
 
@@ -73,11 +74,13 @@ typedef struct
 
 void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
 {
-   PFModule      *this_module   = ThisPFModule;
-   PublicXtra    *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   PFModule         *this_module   = ThisPFModule;
+   PublicXtra       *public_xtra   = (PublicXtra *)PFModulePublicXtra(this_module);
+   InstanceXtra     *instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);  
 
-   Grid             *grid2d = VectorGrid(mann);
-
+   // old: @RMMGrid             *grid2d = VectorGrid(mann);
+Grid *grid3d = instance_xtra -> grid3d;
+    
    GrGeomSolid      *gr_solid, *gr_domain;
 
    VectorUpdateCommHandle       *handle;
@@ -86,7 +89,7 @@ void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
    Type1            *dummy1;
    Type2            *dummy2;
 
-   SubgridArray     *subgrids = GridSubgrids(grid2d);
+   SubgridArray     *subgrids = GridSubgrids(grid3d);
 
    Subgrid          *subgrid;
    Subvector        *ps_sub;
@@ -104,9 +107,9 @@ void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
 
    (void)dummy;
 
-    /*-----------------------------------------------------------------------
-    * Put in any user defined mannings 
-    *-----------------------------------------------------------------------*/
+   /*-----------------------------------------------------------------------
+   * Put in any user defined mannings 
+   *-----------------------------------------------------------------------*/
 
    InitVectorAll(mann, 1.0);
  
@@ -153,9 +156,7 @@ void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
 	    GrGeomInLoop(i, j, k, gr_solid, r, ix, iy, iz, nx, ny, nz,
             {
 	       ips = SubvectorEltIndex(ps_sub, i, j, 0);
-
-	       data[ips] = value;
-      //         mannings[i][j][k] = value;
+               data[ips] = value;
 	    });
 	 }
       }
@@ -321,8 +322,9 @@ void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
 		   GrGeomInLoop(i,j,k,gr_domain,r,ix,iy,iz,nx,ny,nz,
 		   {
 			   ips = SubvectorEltIndex(ps_sub,i,j,0);
-			   ipicv = SubvectorEltIndex(m_values_sub,i,j,k);
-
+			 //  ipicv = SubvectorEltIndex(m_values_sub,i,j,k);
+                         // CMS, CPS 2D mannings only needed
+                           ipicv = SubvectorEltIndex(m_values_sub,i,j,0);
 			   psdat[ips] = m_values_dat[ipicv];
 		   });
 	   } /* End subgrid loop */
@@ -344,6 +346,7 @@ void Mannings (ProblemData *problem_data, Vector *mann, Vector *dummy)
  *--------------------------------------------------------------------------*/
 
 PFModule  *ManningsInitInstanceXtra(
+   Grid    *grid3d,
    Grid    *grid2d)
 {
    PFModule      *this_module   = ThisPFModule;
@@ -356,7 +359,12 @@ PFModule  *ManningsInitInstanceXtra(
       instance_xtra = ctalloc(InstanceXtra, 1);
    else
       instance_xtra = (InstanceXtra *)PFModuleInstanceXtra(this_module);
-
+    
+    if (grid3d != NULL)
+    {
+        (instance_xtra -> grid3d) = grid3d;
+    }
+    
    if (grid2d != NULL)
    {
 	   (instance_xtra -> grid2d) = grid2d;

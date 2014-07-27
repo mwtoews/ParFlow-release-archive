@@ -118,6 +118,7 @@ OBJS = \
 	problem_thermal_conductivity.o\
 	problem_saturation_constitutive.o\
         problem_spec_storage.o\
+        problem_dz_scale.o\
         problem_toposlope_x.o\
         problem_toposlope_y.o\
 	process_grid.o \
@@ -152,12 +153,14 @@ OBJS = \
 	wells_lb.o\
 	write_parflow_binary.o \
 	write_parflow_silo.o \
+	write_parflow_silo_pmpio.o \
 	wrf_parflow.o \
 	n_vector.o \
 	nl_function_eval.o \
 	evaptranssum.o \
 	overlandsum.o \
 	overlandflow_eval.o \
+	overlandflow_eval_diffusive.o \
 	compute_top.o \
 	input_checks.o
 

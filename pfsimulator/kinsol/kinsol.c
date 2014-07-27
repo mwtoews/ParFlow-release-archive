@@ -787,7 +787,7 @@ static int KINSolInit(void *kinmem, integer Neq,
     f1norm = f1normp;
 
     /*  print out the current nni, fnorm, and nfe values for printfl>0) */
-    if(printfl>0)fprintf(msgfp,"KINSol nni= %4ld fnorm= %26.16g nfe=%6ld\n",
+   if(printfl>0)fprintf(msgfp,"KINSol nni= %4ld fnorm= %26.16g nfe=%6ld\n",
 			    nni, fnorm, nfe);
 
     if(ret !=0) break;  /*  ret == 0 means keep iterating ;  != 0 means there
@@ -812,7 +812,7 @@ static int KINSolInit(void *kinmem, integer Neq,
   }
   if(printfl>0)fprintf(msgfp,"KINSol return value %d\n",ret);
 
-  if(printfl>0){
+ if(printfl>0){
     if(ret == KINSOL_SUCCESS)
         fprintf(msgfp,"---KINSOL_SUCCESS\n");
     if(ret==KINSOL_STEP_LT_STPTOL)

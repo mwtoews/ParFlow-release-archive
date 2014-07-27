@@ -13,9 +13,7 @@ SUBDIRS = clm
 default: check
 
 TESTS := \
-	test_X.tcl \
 	default_single.tcl \
-	uvm_flow.tcl \
 	default_richards.tcl \
 	default_richards_wells.tcl \
 	forsyth2.tcl \
@@ -26,7 +24,11 @@ TESTS := \
 	crater2D_vangtable_spline.tcl \
 	crater2D_vangtable_linear.tcl \
 	small_domain.tcl \
-	richards_hydrostatic_equalibrium.tcl
+	richards_hydrostatic_equalibrium.tcl \
+	terrain_following_grid_overland.tcl \
+	var_dz_1D.tcl \
+	LW_var_dz.tcl \
+	LW_var_dz_spinup.tcl
 
 ifeq (${PARFLOW_HAVE_HYPRE},yes)
 TESTS += \
@@ -63,17 +65,18 @@ PARALLEL_2DTOPO_TESTS :=
 ifeq (${AMPS},mpi1)
 
 PARALLEL_3DTOPO_TESTS += \
-	uvm_flow.tcl \
 	default_single.tcl \
-	default_richards.tcl \
-	default_richards_wells.tcl 
+	default_richards.tcl 
 
 PARALLEL_2DTOPO_TESTS += \
 	default_overland.tcl \
 	default_overland.pfmg.jac.tcl \
 	default_overland.pfmg_octree.jac.tcl \
 	water_balance_x.hardflow.nojac.tcl \
-	water_balance_x.hardflow.jac.tcl 
+	water_balance_x.hardflow.jac.tcl \
+	LW_var_dz.tcl \
+	LW_var_dz_spinup.tcl
+
 endif
 
 check: check_sequential check_parallel check_samrai 

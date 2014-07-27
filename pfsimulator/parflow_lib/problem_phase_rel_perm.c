@@ -184,6 +184,11 @@ VanGTable *VanGComputeTable(
 		         - ahnm1*m*pow(opahn,-(m+1))*n*alpha*ahnm1)
 			 + pow(coeff,2)*(m/2)*pow(opahn,(-(m+2)/2))
 	                 *n*alpha*ahnm1;
+    //CPS fix of 1<n<2, K is infinite at pressure head = 0
+   if ((n < 2) && (index == 0)) {
+     a_der[index] = 0;
+   }
+
    }
 
    /* Fill in slope for linear interpolation */
@@ -1674,6 +1679,7 @@ PFModule  *PhaseRelPermInitInstanceXtra(
    InstanceXtra  *instance_xtra;
 
    Type1         *dummy1;
+   VectorUpdateCommHandle   *handle;
 
    if ( PFModuleInstanceXtra(this_module) == NULL )
       instance_xtra = ctalloc(InstanceXtra, 1);
@@ -1696,8 +1702,13 @@ PFModule  *PhaseRelPermInitInstanceXtra(
 
 	    ReadPFBinary((dummy1 ->alpha_file), 
 			 (dummy1 ->alpha_values));
-	    ReadPFBinary((dummy1 ->n_file), 
+            handle = InitVectorUpdate(dummy1 ->alpha_values, VectorUpdateAll);
+            FinalizeVectorUpdate(handle); // This is needed to initalize ghost cells after reading the pfb
+	    
+            ReadPFBinary((dummy1 ->n_file), 
 			 (dummy1 ->n_values));
+            handle = InitVectorUpdate(dummy1 ->n_values, VectorUpdateAll);
+            FinalizeVectorUpdate(handle);
 	 }
       }
 

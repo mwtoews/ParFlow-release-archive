@@ -83,7 +83,7 @@ module clmtype
      real(r8) :: esai      ! exposed stem area index
      real(r8) :: minlai    ! minimum leaf area index
      real(r8) :: maxlai    ! maximum leaf area index
-
+     real(r8) :: bkmult    ! beetle kill multiplier for stomatal resistance @CAP 2014-02-24
 ! Soil physical parameters
 
       real(r8) :: bsw   (nlevsoi) ! Clapp and Hornberger "b"  --- NOT USED in PF.CLM COUPLE  @RMM
@@ -119,8 +119,9 @@ module clmtype
      integer frac_veg_nosno       ! fraction of veg cover, excluding snow-covered veg (now 0 OR 1) [-]
 
      real(r8) :: zi(-nlevsno+0:nlevsoi)          !interface level below a "z" level (m)
-     real(r8) :: dz(-nlevsno+1:nlevsoi)          !layer depth (m)
-     real(r8) :: z (-nlevsno+1:nlevsoi)          !layer thickness (m)
+     real(r8) :: dz(-nlevsno+1:nlevsoi)          !layer thickness (m)
+     real(r8) :: dz_mult(nlevsoi)                !IMF: dz multiplier from parflow
+     real(r8) :: z (-nlevsno+1:nlevsoi)          !layer depth (m)
      real(r8) :: t_soisno  (-nlevsno+1:nlevsoi)  !soil temperature (Kelvin)
      real(r8) :: h2osoi_liq(-nlevsno+1:nlevsoi)  !liquid water (kg/m2) (new)
      real(r8) :: h2osoi_ice(-nlevsno+1:nlevsoi)  !ice lens (kg/m2) (new)
@@ -320,6 +321,8 @@ module clmtype
      real(r8) :: pressure_data(1:nlevsoi)    ! pressure-head (m) over top-10 layers in parflow mapped to CLM grid (1-nlevsoi)
      real(r8) :: evap_trans_data(1:nlevsoi)  ! ET-Flux over top-10 layers in CLM grid (1-nlevsoi) to be mapped back to ParFlow (m/d)
      real(r8) :: porosity_data(1:nlevsoi)    ! porosity (-) over top-10 layers in parflow mapped to CLM grid (1-nlevsoi) - only done during init routine
+
+     integer :: soi_z ! NBE added
 
 
 !=== End Variable List ===================================================

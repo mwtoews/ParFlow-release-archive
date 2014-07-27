@@ -50,7 +50,6 @@
 
 // Which Jacobian to use.
 // 
-
 enum JacobianType { 
    no_nonlinear_jacobian,
    not_set,
@@ -61,6 +60,8 @@ enum JacobianType {
 typedef struct
 {
  enum JacobianType type;
+ double SpinupDampP1; // NBE
+ double SpinupDampP2; // NBE
 } PublicXtra;
 
 typedef struct
@@ -73,6 +74,7 @@ typedef struct
    PFModule     *bc_pressure;
    PFModule     *bc_internal;
    PFModule	*overlandflow_module; //DOK
+   PFModule	*overlandflow_module_diff; //@LEC
 
    /* The analytic Jacobian matrix is decomposed as follows:
     *       
@@ -125,7 +127,9 @@ int           jacobian_stencil_shape_C[5][3] = {{ 0,  0,  0},
  *---------------------------------------------------------------------*/
 
 #define PMean(a, b, c, d)    HarmonicMean(c, d)
+#define PMeanDZ(a,b,c,d)     HarmonicMeanDZ(a, b, c, d)
 #define RPMean(a, b, c, d)   UpstreamMean(a, b, c, d)
+#define Mean(a,b) ArithmeticMean(a, b)  //@RMM
 
 /*  This routine provides the interface between KINSOL and ParFlow
     for richards' equation jacobian evaluations and matrix-vector multiplies.*/
@@ -199,6 +203,7 @@ int           symm_part)      /* Specifies whether to compute just the
    PFModule    *bc_pressure       = (instance_xtra -> bc_pressure);
    PFModule    *bc_internal       = (instance_xtra -> bc_internal);
    PFModule    *overlandflow_module       = (instance_xtra -> overlandflow_module);
+   PFModule    *overlandflow_module_diff       = (instance_xtra -> overlandflow_module_diff);
 
    Matrix      *J                 = (instance_xtra -> J);
    Matrix      *JC                = (instance_xtra -> JC);
@@ -219,13 +224,24 @@ int           symm_part)      /* Specifies whether to compute just the
    Vector      *slope_x              = ProblemDataTSlopeX(problem_data);  //DOK
 
    /* Overland flow variables */ //DOK
-   Vector      *KW, *KE, *KN, *KS;
-   Subvector   *kw_sub, *ke_sub, *kn_sub, *ks_sub, *top_sub, *sx_sub;
-   double      *kw_der, *ke_der, *kn_der, *ks_der;   
+   Vector      *KW, *KE, *KN, *KS, *KWns, *KEns, *KNns, *KSns;
+   Subvector   *kw_sub, *ke_sub, *kn_sub, *ks_sub, *kwns_sub, *kens_sub, *knns_sub, *ksns_sub, *top_sub, *sx_sub;
+   double      *kw_der, *ke_der, *kn_der, *ks_der, *kwns_der, *kens_der, *knns_der, *ksns_der;   
 
    double       gravity           = ProblemGravity(problem);
    double       viscosity         = ProblemPhaseViscosity(problem, 0);
 
+   /* @RMM terrain following grid slope variables */ 
+   Vector      *x_ssl             = ProblemDataSSlopeX(problem_data);  //@RMM
+   Vector      *y_ssl             = ProblemDataSSlopeY(problem_data);  //@RMM
+   Subvector   *x_ssl_sub, *y_ssl_sub;   //@RMM
+   double      *x_ssl_dat, *y_ssl_dat;    //@RMM
+    
+   /* @RMM variable dz multiplier */
+   Vector      *z_mult            = ProblemDataZmult(problem_data);  //@RMM
+   Subvector   *z_mult_sub;   //@RMM
+   double      *z_mult_dat;   //@RMM
+   
    Subgrid     *subgrid;
 
    Subvector   *p_sub, *d_sub, *s_sub, *po_sub, *rp_sub, *ss_sub;
@@ -251,11 +267,19 @@ int           symm_part)      /* Specifies whether to compute just the
    int          sy_v, sz_v;
    int          sy_m, sz_m;
    int          ip, ipo, im, iv;
+   
+   
+   int          diffusive;   //@LEC
+   diffusive = GetIntDefault("OverlandFlowDiffusive",0);
+    
+    int          overlandspinup;   //@RMM
+    overlandspinup = GetIntDefault("OverlandFlowSpinUp",0);
 
    int		itop, k1, io, io1, ovlnd_flag; //DOK
+    int     ioo;   //@RMM
 
-   double       dtmp, dx, dy, dz, vol, ffx, ffy, ffz;
-   double       diff, coeff, x_coeff, y_coeff, z_coeff;
+   double       dtmp, dx, dy, dz, vol, vol2, ffx, ffy, ffz;   //@RMM
+   double       diff, coeff, x_coeff, y_coeff, z_coeff, updir, sep;  //@RMM
    double       prod, prod_rt, prod_no, prod_up, prod_val, prod_lo;
    double       prod_der, prod_rt_der, prod_no_der, prod_up_der;
    double       west_temp, east_temp, north_temp, south_temp;
@@ -263,6 +287,9 @@ int           symm_part)      /* Specifies whether to compute just the
    double       sym_west_temp, sym_east_temp, sym_south_temp, sym_north_temp;
    double       sym_lower_temp, sym_upper_temp;
    double       lower_cond, upper_cond;
+
+   //@RMM : terms for gravity/terrain
+   double   x_dir_g, y_dir_g, z_dir_g, del_x_slope, del_y_slope, x_dir_g_c, y_dir_g_c;
 
    BCStruct    *bc_struct;
    GrGeomSolid *gr_domain         = ProblemDataGrDomain(problem_data);
@@ -295,7 +322,7 @@ int           symm_part)      /* Specifies whether to compute just the
 	       case 7:
 	       {
 		  public_xtra -> type = overland_flow;
-		  printf("SGS setting overland flow\n");
+		 // printf("SGS setting overland flow\n");
 	       }
 	       break;
 	    }
@@ -324,11 +351,19 @@ int           symm_part)      /* Specifies whether to compute just the
    KE = NewVectorType( grid2d, 1, 1, vector_cell_centered);
    KN = NewVectorType( grid2d, 1, 1, vector_cell_centered);
    KS = NewVectorType( grid2d, 1, 1, vector_cell_centered);
+   KWns = NewVectorType( grid2d, 1, 1, vector_cell_centered);
+   KEns = NewVectorType( grid2d, 1, 1, vector_cell_centered);
+   KNns = NewVectorType( grid2d, 1, 1, vector_cell_centered);
+   KSns = NewVectorType( grid2d, 1, 1, vector_cell_centered);
 
    InitVector(KW, 0.0);
    InitVector(KE, 0.0);
    InitVector(KN, 0.0);
    InitVector(KS, 0.0);
+   InitVector(KWns, 0.0);
+   InitVector(KEns, 0.0);
+   InitVector(KNns, 0.0);
+   InitVector(KSns, 0.0);
 
    // SGS set this to 1 since the off/on behavior does not work in 
    // parallel.
@@ -377,6 +412,17 @@ int           symm_part)      /* Specifies whether to compute just the
       po_sub = VectorSubvector(porosity, is);
       ss_sub = VectorSubvector(sstorage, is);
 
+       /* @RMM added to provide access to zmult */
+       z_mult_sub = VectorSubvector(z_mult, is);
+       /* @RMM added to provide variable dz */
+       z_mult_dat = SubvectorData(z_mult_sub);
+       /* @RMM added to provide access to x/y slopes */ 
+       x_ssl_sub = VectorSubvector(x_ssl, is);
+       y_ssl_sub = VectorSubvector(y_ssl, is);
+       /* @RMM  added to provide slopes to terrain fns */
+       x_ssl_dat = SubvectorData(x_ssl_sub);
+       y_ssl_dat = SubvectorData(y_ssl_sub);
+       
       /* RDF: assumes resolutions are the same in all 3 directions */
       r = SubgridRX(subgrid);
 	 
@@ -406,13 +452,13 @@ int           symm_part)      /* Specifies whether to compute just the
       ny_m  = SubmatrixNY(J_sub);
       nz_m  = SubmatrixNZ(J_sub);
 
-      pp  = SubvectorData(p_sub);
-      dp  = SubvectorData(d_sub);
-      sp  = SubvectorData(s_sub);
-      ddp = SubvectorData(dd_sub);
-      sdp = SubvectorData(sd_sub);
-      pop = SubvectorData(po_sub);
-      ss  = SubvectorData(ss_sub);
+      pp  = SubvectorData(p_sub);  //pressure
+      dp  = SubvectorData(d_sub);  // density
+      sp  = SubvectorData(s_sub);  //saturation
+      ddp = SubvectorData(dd_sub);  // density derivative: del-rho / del-press
+      sdp = SubvectorData(sd_sub);  // saturation derivative: del-S / del-press
+      pop = SubvectorData(po_sub);   // porosity
+      ss  = SubvectorData(ss_sub);  // sepcific storage
 
       GrGeomInLoop(i, j, k, gr_domain, r, ix, iy, iz, nx, ny, nz,
       {
@@ -420,9 +466,17 @@ int           symm_part)      /* Specifies whether to compute just the
 	 im  = SubmatrixEltIndex(J_sub, i, j, k);
 	 ipo = SubvectorEltIndex(po_sub, i, j, k);
 	 iv  = SubvectorEltIndex(d_sub,  i, j, k);
-
+          vol2 = vol * z_mult_dat[ipo]; 
 	 cp[im] += (sdp[iv]*dp[iv] + sp[iv]*ddp[iv])
-	    *pop[ipo]*vol + ss[iv]*vol*(sdp[iv]*dp[iv]*pp[iv]+sp[iv]*ddp[iv]*pp[iv]+sp[iv]*dp[iv]); //sk start
+	    *pop[ipo]*vol2 + ss[iv]*vol2*(sdp[iv]*dp[iv]*pp[iv]+sp[iv]*ddp[iv]*pp[iv]+sp[iv]*dp[iv]); //sk start
+          
+//          if (overlandspinup == 1) {
+              /* add flux loss equal to excess head  that overwrites the prior overland flux */
+/*              if (k == nz-1) {
+                  sep = dz*z_mult_dat[ip];  
+                  cp[ip] +=  -vol*z_mult_dat[ip]/ sep;
+              } } 
+                   */
 
       });
 
@@ -497,7 +551,16 @@ int           symm_part)      /* Specifies whether to compute just the
       permy_sub = VectorSubvector(permeability_y, is);
       permz_sub = VectorSubvector(permeability_z, is);
       J_sub    = MatrixSubmatrix(J, is);
-
+       
+       /* @RMM added to provide access to x/y slopes */ 
+       x_ssl_sub = VectorSubvector(x_ssl, is);
+       y_ssl_sub = VectorSubvector(y_ssl, is);
+       
+       /* @RMM added to provide access to zmult */
+       z_mult_sub = VectorSubvector(z_mult, is);
+       /* @RMM added to provide variable dz */
+       z_mult_dat = SubvectorData(z_mult_sub);
+       
       r = SubgridRX(subgrid);
 	 
       ix = SubgridIX(subgrid) - 1;
@@ -551,8 +614,9 @@ int           symm_part)      /* Specifies whether to compute just the
 
 	 ip = SubvectorEltIndex(p_sub, i, j, k);
 	 im = SubmatrixEltIndex(J_sub, i, j, k);
-
-	 prod        = rpp[ip] * dp[ip];
+     ioo = SubvectorEltIndex(p_sub, i, j, 0);  
+	 
+     prod        = rpp[ip] * dp[ip];
 	 prod_der    = rpdp[ip] * dp[ip] + rpp[ip] * ddp[ip];
 
 	 prod_rt     = rpp[ip+1] * dp[ip+1];
@@ -566,81 +630,134 @@ int           symm_part)      /* Specifies whether to compute just the
 	 prod_up_der = rpdp[ip+sz_v] * dp[ip+sz_v] 
 	    + rpp[ip+sz_v] * ddp[ip+sz_v];
 
+          //@RMM
+          x_dir_g = Mean(gravity*sin(atan(x_ssl_dat[ioo])),gravity*sin(atan(x_ssl_dat[ioo+1])));
+          x_dir_g_c = Mean(gravity*cos(atan(x_ssl_dat[ioo])),gravity*cos(atan(x_ssl_dat[ioo+1])));
+          y_dir_g = Mean(gravity*sin(atan(y_ssl_dat[ioo])),gravity*sin(atan(y_ssl_dat[ioo+sy_v])));
+          y_dir_g_c = Mean(gravity*cos(atan(y_ssl_dat[ioo])),gravity*cos(atan(y_ssl_dat[ioo+sy_v])));
+          // x_dir_g = x_ssl_dat[ioo];
+          // y_dir_g = y_ssl_dat[ioo];
+      /*   x_dir_g = 0.0;
+          y_dir_g = 0.0;  
+           x_dir_g_c = 1.0;
+          y_dir_g_c = 1.0; */
 	 /* diff >= 0 implies flow goes left to right */
 	 diff = pp[ip] - pp[ip+1];
+          updir= (diff/dx)*x_dir_g_c - x_dir_g;
 
-	 x_coeff = dt * ffx * (1.0/dx) 
+          x_coeff = dt * ffx * (1.0/dx) *z_mult_dat[ip]
 	    * PMean(pp[ip], pp[ip+1], permxp[ip], permxp[ip+1]) 
 	    / viscosity;
 
-	 sym_west_temp = - x_coeff 
-	    * RPMean(pp[ip], pp[ip+1], prod, prod_rt);
+	 sym_west_temp = (- x_coeff 
+                      * RPMean(updir, 0.0, prod, prod_rt))*x_dir_g_c; 
+      //    * RPMean(pp[ip], pp[ip+1], prod, prod_rt))*x_dir_g_c; 
+     //sym_west_temp += (x_coeff*dx*RPMean(updir,0.0, prod_der, 0.0))*x_dir_g; //@RMM TFG contributions, sym
 
-	 west_temp = - x_coeff * diff 
-	    * RPMean(pp[ip], pp[ip+1], prod_der, 0.0)
-	    + sym_west_temp;
+    //-(x_coeff*dx* RPMean(pp[ip], pp[ip+1], prod, prod_rt))*x_dir_g; //@RMM added sym TFG contributions
 
-	 sym_east_temp = x_coeff
-	    * -RPMean(pp[ip], pp[ip+1], prod, prod_rt);
+	 west_temp = (-x_coeff *diff
+	   // * RPMean(pp[ip], pp[ip+1], prod_der, 0.0)) *x_dir_g_c
+          * RPMean(updir,0.0, prod_der, 0.0)) *x_dir_g_c
+                    + sym_west_temp;
+          
+     west_temp += (x_coeff*dx*RPMean(updir,0.0, prod_der, 0.0))*x_dir_g;  //@RMM TFG contributions, non sym
+//          west_temp += (x_coeff*dx*RPMean(pp[ip], pp[ip+1], prod_der, 0.0))*x_dir_g;  //@RMM TFG contributions, non sym
 
-	 east_temp = x_coeff * diff
-	    * RPMean(pp[ip], pp[ip+1], 0.0, prod_rt_der)
+	 sym_east_temp = (-x_coeff
+                      * RPMean(updir,0.0, prod, prod_rt))*x_dir_g_c;
+//          * RPMean(pp[ip], pp[ip+1], prod, prod_rt))*x_dir_g_c;
+
+          //-(x_coeff*dx* RPMean(pp[ip], pp[ip+1], prod, prod_rt))*x_dir_g;  //@RMM added sym TFG contributions
+     //sym_east_temp += (x_coeff*dx*RPMean(updir,0.0, 0.0, prod_rt_der))*x_dir_g; //@RMM  TFG contributions sym
+
+	 east_temp = (x_coeff * diff
+	    * RPMean(updir,0.0, 0.0, prod_rt_der))*x_dir_g_c
+        //  * RPMean(pp[ip], pp[ip+1], 0.0, prod_rt_der))*x_dir_g_c
 	    + sym_east_temp;
-
+          
+     east_temp += -(x_coeff*dx*RPMean(updir,0.0, 0.0, prod_rt_der))*x_dir_g;  //@RMM  TFG contributions non sym
+     //     east_temp += -(x_coeff*dx*RPMean(pp[ip], pp[ip+1], 0.0, prod_rt_der))*x_dir_g;  //@RMM  TFG contributions non sym
+          
 	 /* diff >= 0 implies flow goes south to north */
 	 diff = pp[ip] - pp[ip+sy_v];
+          updir= (diff/dy)*y_dir_g_c - y_dir_g;    
 
-	 y_coeff = dt * ffy * (1.0/dy) 
+	 y_coeff = dt * ffy * (1.0/dy) * z_mult_dat[ip]
 	    * PMean(pp[ip], pp[ip+sy_v], permyp[ip], permyp[ip+sy_v]) 
 	    / viscosity;
 
 	 sym_south_temp = - y_coeff
-	    *RPMean(pp[ip], pp[ip+sy_v], prod, prod_no);
+	    *RPMean(updir, 0.0, prod, prod_no)*y_dir_g_c;
+     //     *RPMean(pp[ip], pp[ip+sy_v], prod, prod_no)*y_dir_g_c;
 
+          //sym_south_temp += (y_coeff*dy*RPMean(pp[ip], pp[ip+sy_v], prod_der, 0.0))*y_dir_g;  //@RMM TFG contributions, SYMM
+          
 	 south_temp = - y_coeff * diff
-	    * RPMean(pp[ip], pp[ip+sy_v], prod_der, 0.0)
-	    + sym_south_temp;
+	  //  * RPMean(pp[ip], pp[ip+sy_v], prod_der, 0.0)*y_dir_g_c
+          * RPMean(updir, 0.0, prod_der, 0.0)*y_dir_g_c
+          + sym_south_temp;
 
+     south_temp += (y_coeff*dy*RPMean(updir, 0.0, prod_der, 0.0))*y_dir_g;  //@RMM TFG contributions, non sym
+//          south_temp += (y_coeff*dy*RPMean(pp[ip], pp[ip+sy_v], prod_der, 0.0))*y_dir_g;  //@RMM TFG contributions, non sym
+
+          
 	 sym_north_temp = y_coeff
-	    * -RPMean(pp[ip], pp[ip+sy_v], prod, prod_no);
-
-	 north_temp = y_coeff * diff
-	    *  RPMean(pp[ip], pp[ip+sy_v], 0.0, 
-	    prod_no_der)
+	    * -RPMean(updir,0.0, prod, prod_no)*y_dir_g_c;
+//          * -RPMean(pp[ip], pp[ip+sy_v], prod, prod_no)*y_dir_g_c;
+     
+     //sym_north_temp += -(y_coeff*dy*RPMean(pp[ip], pp[ip+sy_v], 0.0, prod_no_der))*y_dir_g;  //@RMM  TFG contributions non SYMM
+	 
+     north_temp = y_coeff * diff
+	    *  RPMean(updir, 0.0, 0.0, 
+//                  *  RPMean(pp[ip], pp[ip+sy_v], 0.0, 
+                  prod_no_der)*y_dir_g_c
 	    + sym_north_temp;
+    
+     north_temp += -(y_coeff*dy*RPMean(updir,0.0, 0.0, prod_no_der))*y_dir_g;  //@RMM  TFG contributions non sym
+//          north_temp += -(y_coeff*dy*RPMean(pp[ip], pp[ip+sy_v], 0.0, prod_no_der))*y_dir_g;  //@RMM  TFG contributions non sym
 
+          sep = (dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]));
 	 /* diff >= 0 implies flow goes lower to upper */
-	 lower_cond = pp[ip]      - 0.5 * dz * dp[ip]      * gravity;
-	 upper_cond = pp[ip+sz_v] + 0.5 * dz * dp[ip+sz_v] * gravity;
+	 lower_cond = pp[ip] /sep     - 0.5 *Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]) * dp[ip]      * gravity;
+	 upper_cond = pp[ip+sz_v]/sep + 0.5 *Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]) * dp[ip+sz_v] * gravity;
+          
+          lower_cond = pp[ip] /sep     - 0.5  * dp[ip]      * gravity;
+          upper_cond = pp[ip+sz_v]/sep + 0.5  * dp[ip+sz_v] * gravity;
+          
+ //                lower_cond = pp[ip]    - 0.5 * dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]) * dp[ip]      * gravity;
+ //                upper_cond = pp[ip+sz_v] + 0.5 * dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]) * dp[ip+sz_v] * gravity;
 	 diff = lower_cond - upper_cond;
 
-	 z_coeff = dt * ffz * (1.0 / dz) 
-	    * PMean(lower_cond, upper_cond, 
-	    permzp[ip], permzp[ip+sz_v]) 
+//	 z_coeff = dt * ffz * (1.0 / (dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]))) 
+                 z_coeff = dt * ffz  
+                 * PMeanDZ(permzp[ip], permzp[ip+sz_v],z_mult_dat[ip],z_mult_dat[ip+sz_v]) 
 	    / viscosity;
 
-	 sym_lower_temp = - z_coeff
+	 sym_lower_temp = - z_coeff* (1.0 / (dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]))) 
 	    * RPMean(lower_cond, upper_cond, prod, 
 	    prod_up);
 		
 	 lower_temp = - z_coeff 
 	    * ( diff * RPMean(lower_cond, upper_cond, prod_der, 0.0) 
-	    + ( - gravity * 0.5 * dz * ddp[ip]
+	    + ( - gravity * 0.5 * dz*(Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v])) * ddp[ip]
 	    * RPMean(lower_cond, upper_cond, prod, 
 	    prod_up) ) )
 	    + sym_lower_temp;
 
-	 sym_upper_temp = z_coeff
+	 sym_upper_temp = z_coeff* (1.0 / (dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]))) 
 	    * -RPMean(lower_cond, upper_cond, prod, 
 	    prod_up);
 
 	 upper_temp = z_coeff
 	    * ( diff * RPMean(lower_cond, upper_cond, 0.0, 
 	    prod_up_der) 
-	    + ( - gravity * 0.5 * dz * ddp[ip+sz_v]
+	    + ( - gravity * 0.5 * dz*(Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v])) * ddp[ip+sz_v]
 	    *RPMean(lower_cond, upper_cond, prod, 
 	    prod_up) ) )
 	    + sym_upper_temp;
+          
+          
 
 	 cp[im]      -= west_temp + south_temp + lower_temp;
 	 cp[im+1]    -= east_temp;
@@ -708,7 +825,11 @@ int           symm_part)      /* Specifies whether to compute just the
 	 
 	 sy_v = nx_v;
 	 sz_v = ny_v * nx_v;
-
+          /* @RMM added to provide access to zmult */
+          z_mult_sub = VectorSubvector(z_mult, is);
+          /* @RMM added to provide variable dz */
+          z_mult_dat = SubvectorData(z_mult_sub);
+          
 	 cp    = SubmatrixStencilData(J_sub, 0);
 	 wp    = SubmatrixStencilData(J_sub, 1);
 	 ep    = SubmatrixStencilData(J_sub, 2);
@@ -744,7 +865,7 @@ int           symm_part)      /* Specifies whether to compute just the
 		     {
 		        diff = pp[ip-1] - pp[ip];
 			prod_der = rpdp[ip-1]*dp[ip-1] + rpp[ip-1]*ddp[ip-1];
-		        coeff = dt * ffx * (1.0/dx) 
+		        coeff = dt *  z_mult_dat[ip]*ffx * (1.0/dx) 
 			   * PMean(pp[ip-1], pp[ip], permxp[ip-1], permxp[ip]) 
 			   / viscosity;
 		        wp[im] = - coeff * diff
@@ -755,7 +876,7 @@ int           symm_part)      /* Specifies whether to compute just the
 		     {
 		        diff = pp[ip] - pp[ip+1];
 			prod_der = rpdp[ip+1]*dp[ip+1] + rpp[ip+1]*ddp[ip+1];
-		        coeff = dt * ffx * (1.0/dx) 
+		        coeff = dt *  z_mult_dat[ip]*ffx * (1.0/dx) 
 			   * PMean(pp[ip], pp[ip+1], permxp[ip], permxp[ip+1]) 
 			   / viscosity;
 		        ep[im] = coeff * diff
@@ -775,7 +896,7 @@ int           symm_part)      /* Specifies whether to compute just the
 		        diff = pp[ip-sy_v] - pp[ip];
 			prod_der = rpdp[ip-sy_v] * dp[ip-sy_v] 
 			   + rpp[ip-sy_v] * ddp[ip-sy_v];
-		        coeff = dt * ffy * (1.0/dy) 
+		        coeff = dt *  z_mult_dat[ip]*ffy * (1.0/dy) 
 			   * PMean(pp[ip-sy_v], pp[ip], 
 			   permyp[ip-sy_v], permyp[ip]) 
 			   / viscosity;
@@ -789,7 +910,7 @@ int           symm_part)      /* Specifies whether to compute just the
 		        diff = pp[ip] - pp[ip+sy_v];
 			prod_der = rpdp[ip+sy_v] * dp[ip+sy_v] 
 			   + rpp[ip+sy_v] * ddp[ip+sy_v];
-		        coeff = dt * ffy * (1.0/dy) 
+		        coeff = dt *  z_mult_dat[ip]*ffy * (1.0/dy) 
 			   * PMean(pp[ip], pp[ip+sy_v], 
 			   permyp[ip], permyp[ip+sy_v]) 
 			   / viscosity;
@@ -808,41 +929,43 @@ int           symm_part)      /* Specifies whether to compute just the
 		     case -1:
 		     {
 			lower_cond = (pp[ip-sz_v]) 
-			   - 0.5 * dz * dp[ip-sz_v] * gravity;
-			upper_cond = (pp[ip] ) + 0.5 * dz * dp[ip] * gravity;
+			   - 0.5 * dz*Mean(z_mult_dat[ip],z_mult_dat[ip-sz_v])
+                 * dp[ip-sz_v] * gravity;
+			upper_cond = (pp[ip] ) + 0.5 * dz *Mean(z_mult_dat[ip],z_mult_dat[ip-sz_v])
+                 * dp[ip] * gravity;
 		        diff = lower_cond - upper_cond;
 			prod_der = rpdp[ip-sz_v] * dp[ip-sz_v] 
 			   + rpp[ip-sz_v] * ddp[ip-sz_v];
 			prod_lo = rpp[ip-sz_v] * dp[ip-sz_v];
-		        coeff = dt * ffz * (1.0/dz) 
-			   * PMean(pp[ip-sz_v], pp[ip], 
-			   permzp[ip-sz_v], permzp[ip]) 
+		        coeff = dt * ffz * (1.0/(dz*Mean(z_mult_dat[ip],z_mult_dat[ip-sz_v]))) 
+			   * PMeanDZ(permzp[ip-sz_v], permzp[ip],
+                       z_mult_dat[ip-sz_v],z_mult_dat[ip]) 
 			   / viscosity;
 		        lp[im] = - coeff * 
 			   ( diff * RPMean(lower_cond, upper_cond, 
 			   prod_der, 0.0)
-			   - gravity * 0.5 * dz * ddp[ip]
+			   - gravity * 0.5 * dz*Mean(z_mult_dat[ip],z_mult_dat[ip-sz_v]) * ddp[ip]
 			   * RPMean(lower_cond, upper_cond, prod_lo, prod));
 
 			break;
 		     }
 		     case 1:
 		     {
-			lower_cond = (pp[ip]) - 0.5 * dz * dp[ip] * gravity;
+                 lower_cond = (pp[ip]) - 0.5 * dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]) * dp[ip] * gravity;
 			upper_cond = (pp[ip+sz_v] ) 
-			   + 0.5 * dz * dp[ip+sz_v] * gravity;
+			   + 0.5 * dz * Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v])*dp[ip+sz_v] * gravity;
 		        diff = lower_cond - upper_cond;
 			prod_der = rpdp[ip+sz_v] * dp[ip+sz_v] 
 			   + rpp[ip+sz_v] * ddp[ip+sz_v];
 			prod_up = rpp[ip+sz_v] * dp[ip+sz_v];
-		        coeff = dt * ffz * (1.0/dz) 
-			   * PMean(lower_cond, upper_cond, 
-			   permzp[ip], permzp[ip+sz_v]) 
+		        coeff = dt * ffz * (1.0/(dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]))) 
+			   * PMeanDZ(permzp[ip], permzp[ip+sz_v],
+                         z_mult_dat[ip],z_mult_dat[ip+sz_v]) 
 			   / viscosity;
 		        up[im] = - coeff * 
 			   ( diff * RPMean(lower_cond, upper_cond, 
 			   0.0, prod_der)
-			   - gravity * 0.5 * dz * ddp[ip]
+			   - gravity * 0.5 * dz *(Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]))* ddp[ip]
 			   * RPMean(lower_cond, upper_cond, prod, prod_up));
 
 			break;
@@ -877,11 +1000,20 @@ int           symm_part)      /* Specifies whether to compute just the
       ke_sub = VectorSubvector(KE, is);
       kn_sub = VectorSubvector(KN, is);
       ks_sub = VectorSubvector(KS, is);
+      kwns_sub = VectorSubvector(KWns, is);
+      kens_sub = VectorSubvector(KEns, is);
+      knns_sub = VectorSubvector(KNns, is);
+      ksns_sub = VectorSubvector(KSns, is);
 
       dx = SubgridDX(subgrid);
       dy = SubgridDY(subgrid);
       dz = SubgridDZ(subgrid);
 
+       /* @RMM added to provide access to zmult */
+       z_mult_sub = VectorSubvector(z_mult, is);
+       /* @RMM added to provide variable dz */
+       z_mult_dat = SubvectorData(z_mult_sub);
+       
       vol = dx*dy*dz;
       
       ix = SubgridIX(subgrid);
@@ -911,6 +1043,10 @@ int           symm_part)      /* Specifies whether to compute just the
       ke_der = SubvectorData(ke_sub);
       kn_der = SubvectorData(kn_sub);
       ks_der = SubvectorData(ks_sub);
+      kwns_der = SubvectorData(kwns_sub);
+      kens_der = SubvectorData(kens_sub);
+      knns_der = SubvectorData(knns_sub);
+      ksns_der = SubvectorData(ksns_sub);
 
       pp     = SubvectorData(p_sub);
       sp     = SubvectorData(s_sub);
@@ -950,7 +1086,7 @@ int           symm_part)      /* Specifies whether to compute just the
 
 		  if (fdir[0])
 		  {
-		     coeff = dt * ffx * (2.0/dx) * permxp[ip] / viscosity;
+		     coeff = dt * ffx* z_mult_dat[ip] * (2.0/dx) * permxp[ip] / viscosity;
 
 		     switch(fdir[0])
 		     {
@@ -980,7 +1116,7 @@ int           symm_part)      /* Specifies whether to compute just the
 
 		  else if (fdir[1])
 		  {
-		     coeff = dt * ffy * (2.0/dy) * permyp[ip] / viscosity;
+		     coeff = dt * ffy*z_mult_dat[ip] * (2.0/dy) * permyp[ip] / viscosity;
 
 		     switch(fdir[1])
 		     {
@@ -1010,7 +1146,7 @@ int           symm_part)      /* Specifies whether to compute just the
 
 		  else if (fdir[2])
 		  {
-		     coeff = dt * ffz * (2.0/dz) * permzp[ip] / viscosity;
+		     coeff = dt * ffz * (2.0/(dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]))) * permzp[ip] / viscosity;
 
 		     switch(fdir[2])
 		     {
@@ -1019,13 +1155,13 @@ int           symm_part)      /* Specifies whether to compute just the
 			   op = lp;
 			   prod_val = rpp[ip-sz_v] * den_d;
 
-			   lower_cond = (value ) - 0.5 * dz * den_d * gravity;
-			   upper_cond = (pp[ip]) + 0.5 * dz * dp[ip] * gravity;
+			   lower_cond = (value ) - 0.5 * dz *z_mult_dat[ip]* den_d * gravity;
+			   upper_cond = (pp[ip]) + 0.5 * dz *z_mult_dat[ip] * dp[ip] * gravity;
 			   diff = lower_cond - upper_cond;
 
 			   o_temp =  coeff 
 			      * ( diff * RPMean(lower_cond, upper_cond, 0.0, prod_der) 
-			      + ( (-1.0 - gravity * 0.5 * dz * ddp[ip])
+			      + ( (-1.0 - gravity * 0.5 * dz*Mean(z_mult_dat[ip],z_mult_dat[ip-sz_v]) * ddp[ip])
 			      * RPMean(lower_cond, upper_cond, prod_val, prod)));
 			   break;
 			}
@@ -1034,13 +1170,13 @@ int           symm_part)      /* Specifies whether to compute just the
 			   op = up;
 			   prod_val = rpp[ip+sz_v] * den_d;
 
-			   lower_cond = (pp[ip]) - 0.5 * dz * dp[ip] * gravity;
-			   upper_cond = (value ) + 0.5 * dz * den_d * gravity;
+			   lower_cond = (pp[ip]) - 0.5 * dz *Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v])* dp[ip] * gravity;
+			   upper_cond = (value ) + 0.5 * dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]) * den_d * gravity;
 			   diff = lower_cond - upper_cond;
 
 			   o_temp = - coeff 
 			      * ( diff * RPMean(lower_cond, upper_cond, prod_der, 0.0) 
-			      + ( (1.0 - gravity * 0.5 * dz * ddp[ip])
+			      + ( (1.0 - gravity * 0.5 * dz *Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v])* ddp[ip])
 			      * RPMean(lower_cond, upper_cond, prod, prod_val)));
 			   break;
 			}
@@ -1130,7 +1266,7 @@ int           symm_part)      /* Specifies whether to compute just the
 			   
 			   if ((pp[ip]) > 0.0) 
 			   {
-			      cp[im] += vol /dz*(dt+1);
+			      cp[im] += (vol*z_mult_dat[ip]) /(dz*Mean(z_mult_dat[ip],z_mult_dat[ip+sz_v]))*(dt+1);
 			   }	
 			}
 		     });
@@ -1138,13 +1274,75 @@ int           symm_part)      /* Specifies whether to compute just the
 		  }
 		  case overland_flow :
 		  { 
+		 // printf("case overland_flow\n");
 		     /* Get overland flow contributions - DOK*/
 		     // SGS can we skip this invocation if !overland_flow? 
-		     PFModuleInvokeType(OverlandFlowEvalInvoke, overlandflow_module, 
+		     		     
+		     //PFModuleInvokeType(OverlandFlowEvalInvoke, overlandflow_module, 
+			//		(grid, is, bc_struct, ipatch, problem_data, pressure,
+			//		 ke_der, kw_der, kn_der, ks_der, NULL, NULL, CALCDER));
+		     
+              if (overlandspinup == 1) {
+                  /* add flux loss equal to excess head  that overwrites the prior overland flux */
+                  BCStructPatchLoop(i, j, k, fdir, ival, bc_struct, ipatch, is,
+                                    {
+                                        if(fdir[2] == 1) {
+                                            ip   = SubvectorEltIndex(p_sub, i, j, k);
+                                            io   = SubvectorEltIndex(p_sub, i, j, 0);
+                                            im = SubmatrixEltIndex(J_sub, i, j, k);
+                                            vol = dx*dy*dz;
+                                            
+                                            if ((pp[ip]) >= 0.0) 
+                                            {
+                                                //sep = dz*z_mult_dat[ip];  //RMM
+                                               // cp[im] += (vol/dz)*dt*(1.0 + 1.0*exp(0.0*1.0)*0.001);
+                                                //cp[im] += vol*z_mult_dat[ip]*dt*(1.0 + public_xtra -> SpinupDampP1 *exp(0.0* public_xtra -> SpinupDampP1)* public_xtra -> SpinupDampP2); //NBE
+                                                //@RMM- fixed overland spinpup to 1) be consistent with nl function eval
+                                               //cp[im] += (vol/dz)*dt*(1.0 + public_xtra -> SpinupDampP1 *exp(0.0* public_xtra -> SpinupDampP1)* public_xtra -> SpinupDampP2); //NBE
+                                                // Laura's version
+                                                cp[im] += (vol/dz)*dt*(1.0 + 0.0); //LEC
+                                
+                                            } else {
+                                                //cp[im] += 0.0 + (vol/dz)*z_mult_dat[ip]*dt*1.0*exp(pfmin(pp[ip],0.0)*1.0)*0.001;
+
+                                            //cp[im] += 0.0 + vol*z_mult_dat[ip]*dt* public_xtra -> SpinupDampP1 *exp(pfmin(pp[ip],0.0)* public_xtra -> SpinupDampP1)* public_xtra -> SpinupDampP2; //NBE
+                                            // Laura's version
+                                                cp[im] += 0.0; //+ vol/dz*dt*public_xtra -> SpinupDampP1 *exp(pfmin(pp[ip],0.0)* public_xtra -> SpinupDampP1)* public_xtra -> SpinupDampP2; //NBE
+
+                                            }
+                                        }
+                                    });
+                  
+
+              }  else {
+
+		      /* Get overland flow contributions for using kinematic or diffusive - LEC */
+		      if (diffusive == 0) {
+            	      	      PFModuleInvokeType(OverlandFlowEvalInvoke, overlandflow_module, 
 					(grid, is, bc_struct, ipatch, problem_data, pressure,
 					 ke_der, kw_der, kn_der, ks_der, NULL, NULL, CALCDER));
+			     //  printf("Kinematic Diffuive CALCDER invoked\n");
+		      } else {
+		      	    //  printf("Else... invoke diffusive CALCDER\n");
+		      			      	      
+		      	        /* Test running Diffuisve calc FCN */               
+                               //double *dummy1, *dummy2, *dummy3, *dummy4; 
+                               //PFModuleInvokeType(OverlandFlowEvalDiffInvoke, overlandflow_module_diff, (grid, is, bc_struct, ipatch, problem_data, pressure,
+                                //                                             ke_der, kw_der, kn_der, ks_der, 
+                                 //       dummy1, dummy2, dummy3, dummy4,
+                                  //                                                    NULL, NULL, CALCFCN));
+                              
+                               PFModuleInvokeType(OverlandFlowEvalDiffInvoke, overlandflow_module_diff, 
+		      	      	      		(grid, is, bc_struct, ipatch, problem_data, pressure,
+                                                 ke_der, kw_der, kn_der, ks_der, 
+                                                 kens_der, kwns_der, knns_der, ksns_der, NULL, NULL, CALCDER));
+                              // printf("Diffusive CALCDER invoked\n");
+                      }
+              }
+		     
 		     
 		     break;
+
 		  }
 		  
 	       }
@@ -1159,7 +1357,7 @@ int           symm_part)      /* Specifies whether to compute just the
 
 
 
-   if(public_xtra -> type == overland_flow) {
+   if (public_xtra -> type == overland_flow) {
 
       // SGS always have to do communication here since
       // each processor may/may not be doing overland flow.
@@ -1181,6 +1379,18 @@ int           symm_part)      /* Specifies whether to compute just the
       FinalizeVectorUpdate(vector_update_handle);
       /* Pass KN values to neighbors.  */
       vector_update_handle = InitVectorUpdate(KN, VectorUpdateAll);
+      FinalizeVectorUpdate(vector_update_handle);
+       /* Pass KWns values to neighbors.  */
+      vector_update_handle = InitVectorUpdate(KWns, VectorUpdateAll);
+      FinalizeVectorUpdate(vector_update_handle);
+      /* Pass KEns values to neighbors.  */
+      vector_update_handle = InitVectorUpdate(KEns, VectorUpdateAll);
+      FinalizeVectorUpdate(vector_update_handle);
+      /* Pass KSns values to neighbors.  */
+      vector_update_handle = InitVectorUpdate(KSns, VectorUpdateAll);
+      FinalizeVectorUpdate(vector_update_handle);
+      /* Pass KNns values to neighbors.  */
+      vector_update_handle = InitVectorUpdate(KNns, VectorUpdateAll);
       FinalizeVectorUpdate(vector_update_handle);
    }
 
@@ -1211,6 +1421,10 @@ int           symm_part)      /* Specifies whether to compute just the
 	 ke_sub = VectorSubvector(KE, is);
 	 kn_sub = VectorSubvector(KN, is);
 	 ks_sub = VectorSubvector(KS, is);
+	 kwns_sub = VectorSubvector(KWns, is);
+	 kens_sub = VectorSubvector(KEns, is);
+	 knns_sub = VectorSubvector(KNns, is);
+	 ksns_sub = VectorSubvector(KSns, is);
 
 	 top_sub = VectorSubvector(top, is);
 	 sx_sub = VectorSubvector(slope_x, is);
@@ -1249,6 +1463,10 @@ int           symm_part)      /* Specifies whether to compute just the
 	 ke_der = SubvectorData(ke_sub);
 	 kn_der = SubvectorData(kn_sub);
 	 ks_der = SubvectorData(ks_sub);
+	 kwns_der = SubvectorData(kwns_sub);
+	 kens_der = SubvectorData(kens_sub);
+	 knns_der = SubvectorData(knns_sub);
+	 ksns_der = SubvectorData(ksns_sub);
 
 	 top_dat = SubvectorData(top_sub);
       
@@ -1320,25 +1538,50 @@ int           symm_part)      /* Specifies whether to compute just the
 			}
 			
 			/* Now add overland contributions to JC */ 
-			if ((pp[ip]) > 0.0) 
-			{
-			   /*diagonal term */
-			   cp_c[io] += (vol /dz) + (vol/ffy)*dt*(ke_der[io1] - kw_der[io1])
-			      + (vol/ffx)*dt*(kn_der[io1] - ks_der[io1]);
+		        if ((pp[ip]) > 0.0) 
+				{
+				/*diagonal term */
+                    cp_c[io] += (vol /dz) + (vol/ffy)*dt*(ke_der[io1] - kw_der[io1])
+                    + (vol/ffx)*dt*(kn_der[io1] - ks_der[io1]);
+                  // +dt*(vol/dz)*(public_xtra -> SpinupDampP1 *exp(0.0* public_xtra -> SpinupDampP1)* public_xtra -> SpinupDampP2); //NBE
 
-			}
-			   			   
-			/*west term */
-			wp_c[io] -=  (vol/ffy)*dt*(ke_der[io1-1]); 
+				} else {
+                    //cp_c[io] += 0.0;
+                    // Laura's version
+                    cp_c[io] += 0.0 + dt*(vol/dz)*(public_xtra -> SpinupDampP1 *exp(pfmin(pp[ip],0.0)* public_xtra -> SpinupDampP1)* public_xtra -> SpinupDampP2); //NBE              
 
-			/*East term */
-			ep_c[io] +=  (vol/ffy)*dt*(kw_der[io1+1]); 
+                    //+ dt*(vol/dz)*(public_xtra -> SpinupDampP1 *exp(0.0* public_xtra -> SpinupDampP1)* public_xtra -> SpinupDampP2); //NBE
+                }
+			
+			if (diffusive == 0) {
+				   			   
+				/*west term */
+				wp_c[io] -=  (vol/ffy)*dt*(ke_der[io1-1]); 
 
-			/*south term */
-			sop_c[io] -=  (vol/ffx)*dt*(kn_der[io1-sy_v]); 
+				/*East term */
+				ep_c[io] +=  (vol/ffy)*dt*(kw_der[io1+1]); 
 
-			/*north term */
-			np_c[io] +=  (vol/ffx)*dt*(ks_der[io1+sy_v]); 	
+				/*south term */
+				sop_c[io] -=  (vol/ffx)*dt*(kn_der[io1-sy_v]); 
+
+				/*north term */
+				np_c[io] +=  (vol/ffx)*dt*(ks_der[io1+sy_v]); 
+		        } else {
+				   			   
+				/*west term */
+				wp_c[io] -=  (vol/ffy)*dt*(kwns_der[io1]); 
+
+				/*East term */
+				ep_c[io] +=  (vol/ffy)*dt*(kens_der[io1]); 
+
+				/*south term */
+				sop_c[io] -=  (vol/ffx)*dt*(ksns_der[io1]); 
+
+				/*north term */
+				np_c[io] +=  (vol/ffx)*dt*(knns_der[io1]); 	
+		        
+		        }
+                 
 		     } 
 		  }); 
 		  break;
@@ -1402,14 +1645,14 @@ int           symm_part)      /* Specifies whether to compute just the
 		       lp[im] = 0.0;
 		       up[im] = 0.0;
 
-#if 0
-		       /* JC matrix */
-		       cp_c[im] = 1.0;
-		       wp_c[im] = 0.0;
-		       ep_c[im] = 0.0;
-		       sop_c[im] = 0.0;
-		       np_c[im] = 0.0;
-#endif
+//#if 0
+//		       /* JC matrix */
+//		       cp_c[im] = 1.0;
+//		       wp_c[im] = 0.0;
+//		       ep_c[im] = 0.0;
+//		       sop_c[im] = 0.0;
+//		       np_c[im] = 0.0;
+//#endif */
 		    });
    }
 
@@ -1451,7 +1694,7 @@ int           symm_part)      /* Specifies whether to compute just the
     * Free temp vectors
     *-----------------------------------------------------------------------*/
 
-   FreeBCStruct(bc_struct);
+    FreeBCStruct(bc_struct);
 
    FreeVector(density_der);
    FreeVector(saturation_der);
@@ -1459,6 +1702,10 @@ int           symm_part)      /* Specifies whether to compute just the
    FreeVector(KE);
    FreeVector(KN);
    FreeVector(KS);
+   FreeVector(KWns);
+   FreeVector(KEns);
+   FreeVector(KNns);
+   FreeVector(KSns);
 
    return;
 }
@@ -1542,6 +1789,8 @@ PFModule    *RichardsJacobianEvalInitInstanceXtra(
          PFModuleNewInstance(ProblemBCInternal(problem), () );
       (instance_xtra -> overlandflow_module) =
          PFModuleNewInstance(ProblemOverlandFlowEval(problem), () ); //DOK
+       (instance_xtra -> overlandflow_module_diff) =
+       PFModuleNewInstance(ProblemOverlandFlowEvalDiff(problem), () ); //RMM-LEC
    }
    else {
       PFModuleReNewInstance((instance_xtra -> density_module), ());
@@ -1552,6 +1801,8 @@ PFModule    *RichardsJacobianEvalInitInstanceXtra(
 				(NULL, NULL));
       PFModuleReNewInstance((instance_xtra -> bc_internal), ());
       PFModuleReNewInstance((instance_xtra -> overlandflow_module), ()); //DOK
+       PFModuleReNewInstance((instance_xtra -> overlandflow_module_diff), ()); //RMM-LEC
+ 
    }
 
 
@@ -1577,6 +1828,7 @@ void  RichardsJacobianEvalFreeInstanceXtra()
       PFModuleFreeInstance(instance_xtra -> rel_perm_module);
       PFModuleFreeInstance(instance_xtra -> bc_internal);
       PFModuleFreeInstance(instance_xtra -> overlandflow_module); //DOK      
+        PFModuleFreeInstance(instance_xtra -> overlandflow_module_diff); //RMM-LEC      
 
       FreeMatrix(instance_xtra -> J);
 
@@ -1604,6 +1856,12 @@ PFModule   *RichardsJacobianEvalNewPublicXtra(char *name)
    (void)name;
 
    public_xtra = ctalloc(PublicXtra, 1);
+/* These parameters dampen the transition/switching into overland flow to speedup
+   the spinup process */
+   sprintf(key, "OverlandSpinupDampP1");
+   public_xtra -> SpinupDampP1 = GetDoubleDefault(key, 0.0);
+   sprintf(key, "OverlandSpinupDampP2");
+   public_xtra -> SpinupDampP2 = GetDoubleDefault(key, 0.0); // NBE
 
    switch_na = NA_NewNameArray("False True");
    sprintf(key, "Solver.Nonlinear.UseJacobian");
